@@ -58,6 +58,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <drm/drm_fourcc.h>
+#include <libpng16/png.h>
 
 #define VK_PROTOTYPES
 #include <vulkan/vulkan.h>
@@ -99,6 +100,7 @@ struct vkcube_buffer {
    VkColorAttachmentView view;
    VkFramebuffer framebuffer;
    uint32_t fb;
+   uint32_t stride;
 };
 
 
@@ -132,13 +134,66 @@ fail_if(int cond, const char *format, ...)
 }
 
 static void
+convert_to_bytes(png_structp png, png_row_infop row_info, png_bytep data)
+{
+   for (uint32_t i = 0; i < row_info->rowbytes; i += 4) {
+      uint8_t *b = &data[i];
+      uint32_t pixel;
+
+      memcpy (&pixel, b, sizeof (uint32_t));
+      b[0] = (pixel & 0xff0000) >> 16;
+      b[1] = (pixel & 0x00ff00) >>  8;
+      b[2] = (pixel & 0x0000ff) >>  0;
+      b[3] = 0xff;
+   }
+}
+
+static void
+write_png(const char *path, int32_t width, int32_t height, int32_t stride, void *pixels)
+{
+   FILE *f = NULL;
+   png_structp png_writer = NULL;
+   png_infop png_info = NULL;
+
+   uint8_t *rows[height];
+
+   for (int32_t y = 0; y < height; y++)
+      rows[y] = pixels + y * stride;
+
+   f = fopen(path, "wb");
+   fail_if(!f, "failed to open file for writing: %s", path);
+
+   png_writer = png_create_write_struct(PNG_LIBPNG_VER_STRING,
+                                        NULL, NULL, NULL);
+   fail_if (!png_writer, "failed to create png writer");
+
+   png_info = png_create_info_struct(png_writer);
+   fail_if(!png_info, "failed to create png writer info");
+
+   png_init_io(png_writer, f);
+   png_set_IHDR(png_writer, png_info,
+                width, height,
+                8, PNG_COLOR_TYPE_RGBA,
+                PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
+                PNG_FILTER_TYPE_DEFAULT);
+   png_write_info(png_writer, png_info);
+   png_set_rows(png_writer, png_info, rows);
+   png_set_write_user_transform_fn(png_writer, convert_to_bytes);
+   png_write_png(png_writer, png_info, PNG_TRANSFORM_IDENTITY, NULL);
+
+   png_destroy_write_struct(&png_writer, &png_info);
+
+   fclose(f);
+}
+
+static void
 handle_signal(int sig)
 {
    restore_vt();
 }
 
 static void
-init_vt(void)
+init_vt(struct vkcube *vc)
 {
    struct termios tio;
    struct stat buf;
@@ -150,8 +205,12 @@ init_vt(void)
    /* Make sure we're on a vt. */
    ret = fstat(STDIN_FILENO, &buf);
    fail_if(ret == -1, "failed to stat stdin\n");
-   fail_if(major(buf.st_rdev) != TTY_MAJOR,
-           "stdin not a vt, don't run this under X\n");
+
+   if (major(buf.st_rdev) != TTY_MAJOR) {
+      fprintf(stderr, "stdin not a vt, running in no-display mode\n");
+      vc->no_display = true;
+      return;
+   }
 
    /* Set console input to raw mode. */
    tio = save_tio;
@@ -350,7 +409,7 @@ init_vk(struct vkcube *vc)
 #define GLSL(src) "#version 330\n" #src
 
    static const char vs_source[] = GLSL(
-      layout(group = 0, index = 0) uniform block {
+      layout(set = 0, index = 0) uniform block {
           uniform mat4 modelviewMatrix;
           uniform mat4 modelviewprojectionMatrix;
           uniform mat3 normalMatrix;
@@ -644,28 +703,74 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
    uint32_t stride;
    int fd, ret;
 
-   b->gbm_bo = gbm_bo_create(vc->gbm_device, vc->width, vc->height,
-                             GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+   if (vc->no_display) {
+      vkCreateImage(vc->device,
+                    &(VkImageCreateInfo) {
+                       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                       .imageType = VK_IMAGE_TYPE_2D,
+                       .format = VK_FORMAT_B8G8R8A8_UNORM,
+                       .extent = { .width = vc->width, .height = vc->height, .depth = 1 },
+                       .mipLevels = 1,
+                       .arraySize = 1,
+                       .samples = 1,
+                       .tiling = VK_IMAGE_TILING_LINEAR,
+                       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                       .flags = 0,
+                    },
+                    &b->image);
 
-   fd = gbm_bo_get_fd(b->gbm_bo);
-   stride = gbm_bo_get_stride(b->gbm_bo);
-   vkCreateDmaBufImageINTEL(vc->device,
-			    &(VkDmaBufImageCreateInfo) {
-			       .sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
-                               .fd = fd,
-			       .format = VK_FORMAT_R8G8B8A8_UNORM,
-			       .extent = { vc->width, vc->height, 1 },
-			       .strideInBytes = stride
-			    },
-			    &b->mem,
-			    &b->image);
-   close(fd);
+      VkMemoryRequirements requirements;
+      size_t size = sizeof(requirements);
+      vkGetObjectInfo(vc->device, VK_OBJECT_TYPE_IMAGE, b->image,
+                      VK_OBJECT_INFO_TYPE_MEMORY_REQUIREMENTS,
+                      &size, &requirements);
+
+      vkAllocMemory(vc->device,
+                    &(VkMemoryAllocInfo) {
+                       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOC_INFO,
+                       .allocationSize = requirements.size,
+                       .memProps = VK_MEMORY_PROPERTY_HOST_DEVICE_COHERENT_BIT,
+                       .memPriority = VK_MEMORY_PRIORITY_NORMAL
+                    },
+                    &b->mem);
+
+      vkQueueBindObjectMemory(vc->queue, VK_OBJECT_TYPE_IMAGE,
+                              b->image, 0, b->mem, 0);
+
+      b->stride = vc->width * 4;
+   } else {
+      b->gbm_bo = gbm_bo_create(vc->gbm_device, vc->width, vc->height,
+                                GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+
+      fd = gbm_bo_get_fd(b->gbm_bo);
+      stride = gbm_bo_get_stride(b->gbm_bo);
+      vkCreateDmaBufImageINTEL(vc->device,
+                               &(VkDmaBufImageCreateInfo) {
+                                  .sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
+                                  .fd = fd,
+                                  .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                  .extent = { vc->width, vc->height, 1 },
+                                  .strideInBytes = stride
+                                },
+                               &b->mem,
+                               &b->image);
+      close(fd);
+
+      b->stride = gbm_bo_get_stride(b->gbm_bo);
+      uint32_t bo_handles[4] = { gbm_bo_get_handle(b->gbm_bo).s32, };
+      uint32_t pitches[4] = { stride, };
+      uint32_t offsets[4] = { 0, };
+      ret = drmModeAddFB2(vc->fd, vc->width, vc->height,
+                          DRM_FORMAT_XRGB8888, bo_handles,
+                          pitches, offsets, &b->fb, 0);
+      fail_if(ret == -1, "addfb2 failed\n");
+   }
 
    vkCreateColorAttachmentView(vc->device,
                                &(VkColorAttachmentViewCreateInfo) {
                                   .sType = VK_STRUCTURE_TYPE_COLOR_ATTACHMENT_VIEW_CREATE_INFO,
                                   .image = b->image,
-                                  .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                  .format = VK_FORMAT_B8G8R8A8_UNORM,
                                   .mipLevel = 0,
                                   .baseArraySlice = 0,
                                   .arraySize = 1,
@@ -691,15 +796,21 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
                           .layers = 1
                        },
                        &b->framebuffer);
-
-   uint32_t bo_handles[4] = { gbm_bo_get_handle(b->gbm_bo).s32, };
-   uint32_t pitches[4] = { stride, };
-   uint32_t offsets[4] = { 0, };
-   ret = drmModeAddFB2(vc->fd, vc->width, vc->height,
-                       DRM_FORMAT_XRGB8888, bo_handles,
-                       pitches, offsets, &b->fb, 0);
-   fail_if(ret == -1, "addfb2 failed\n");
 }
+
+static void
+write_buffer(struct vkcube *vc, struct vkcube_buffer *b)
+{
+   static const char filename[] = "cube.png";
+   uint32_t mem_size = b->stride * vc->height;
+   void *map;
+
+   vkMapMemory(vc->device, b->mem, 0, mem_size, 0, &map);
+
+   fprintf(stderr, "writing first frame to %s\n", filename);
+   write_png(filename, vc->width, vc->height, b->stride, map);
+}
+
 
 static void
 render_cube_frame(struct vkcube *vc, struct vkcube_buffer *b, int i)
@@ -813,12 +924,12 @@ present(struct vkcube *vc, struct vkcube_buffer *b, int i)
 {
    render_cube_frame(vc, b, i);
 
-   if (vc->no_display)
-      printf("present frame %d\n", i);
-   else
+   if (vc->no_display) {
+      write_buffer(vc, b);
+   } else {
       drmModePageFlip(vc->fd, vc->crtc->crtc_id, b->fb,
                       DRM_MODE_PAGE_FLIP_EVENT, NULL);
-
+   }
 }
 
 static void
@@ -843,9 +954,9 @@ int main(int argc, char *argv[])
 	 exit(1);
       }
    }
-			   
+
    if (!vc.no_display)
-      init_vt();
+      init_vt(&vc);
 
    init_kms(&vc);
 
@@ -856,6 +967,9 @@ int main(int argc, char *argv[])
 
    present(&vc, &b[i], i);
    i++;
+
+   if (vc.no_display)
+      exit(0);
 
    int len;
    char buf[16];
