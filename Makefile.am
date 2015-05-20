@@ -19,4 +19,4 @@ vkcube_SOURCES =				\
 	esUtil.h
 
 vkcube_CFLAGS = $(CFLAGS) $(MINIGBM_CPPFLAGS) $(LIBDRM_CFLAGS)
-vkcube_LDADD = $(MINIGBM_LDFLAGS) $(MESA_LDFLAGS) $(LIBDRM_LIBS) -lgbm -lm -lvulkan -lpng16
+vkcube_LDADD = $(MINIGBM_LDFLAGS) $(MESA_LDFLAGS) $(LIBDRM_LIBS) -lgbm -lm -lvulkan -lpng16 -lxcb

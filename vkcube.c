@@ -54,6 +54,8 @@
 #include <linux/major.h>
 #include <termios.h>
 #include <poll.h>
+#include <sys/time.h>
+#include <math.h>
 
 #include <xf86drm.h>
 #include <xf86drmMode.h>
@@ -63,14 +65,34 @@
 #define VK_PROTOTYPES
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_intel.h>
+#include <vulkan/vk_wsi_lunarg.h>
+
+#include <xcb/xcb.h>
 
 #include <gbm.h>
 
 #include "esUtil.h"
 
+struct vkcube_buffer {
+   struct gbm_bo *gbm_bo;
+   VkDeviceMemory mem;
+   VkImage image;
+   VkColorAttachmentView view;
+   VkFramebuffer framebuffer;
+   uint32_t fb;
+   uint32_t stride;
+};
+
 struct vkcube {
    int fd;
    struct gbm_device *gbm_device;
+
+   xcb_connection_t *conn;
+   xcb_window_t window;
+   xcb_atom_t atom_wm_protocols;
+   xcb_atom_t atom_wm_delete_window;
+   VkSwapChainWSI swap_chain;
+   VkSwapChainImageInfoWSI swap_chain_image_info[2];
 
    drmModeCrtc *crtc;
    drmModeConnector *connector;
@@ -87,34 +109,15 @@ struct vkcube {
    VkDynamicVpState vp_state;
    VkDynamicRsState rs_state;
    VkDescriptorSet descriptor_set;
+   VkFence fence;
 
    void *map;
    uint32_t vertex_offset, colors_offset, normals_offset;
-   bool no_display;
+
+   struct timeval start_tv;
+   struct vkcube_buffer buffers[2];
+   int current;
 };
-
-struct vkcube_buffer {
-   struct gbm_bo *gbm_bo;
-   VkDeviceMemory mem;
-   VkImage image;
-   VkColorAttachmentView view;
-   VkFramebuffer framebuffer;
-   uint32_t fb;
-   uint32_t stride;
-};
-
-
-static struct termios save_tio;
-
-static void
-restore_vt(void)
-{
-   struct vt_mode mode = { .mode = VT_AUTO };
-   ioctl(STDIN_FILENO, VT_SETMODE, &mode);
-
-   tcsetattr(STDIN_FILENO, TCSANOW, &save_tio);
-   ioctl(STDIN_FILENO, KDSETMODE, KD_TEXT);
-}
 
 static void
 fail_if(int cond, const char *format, ...)
@@ -124,165 +127,11 @@ fail_if(int cond, const char *format, ...)
    if (!cond)
       return;
 
-   restore_vt();
-
    va_start(args, format);
    vfprintf(stderr, format, args);
    va_end(args);
 
    exit(1);
-}
-
-static void
-convert_to_bytes(png_structp png, png_row_infop row_info, png_bytep data)
-{
-   for (uint32_t i = 0; i < row_info->rowbytes; i += 4) {
-      uint8_t *b = &data[i];
-      uint32_t pixel;
-
-      memcpy (&pixel, b, sizeof (uint32_t));
-      b[0] = (pixel & 0xff0000) >> 16;
-      b[1] = (pixel & 0x00ff00) >>  8;
-      b[2] = (pixel & 0x0000ff) >>  0;
-      b[3] = 0xff;
-   }
-}
-
-static void
-write_png(const char *path, int32_t width, int32_t height, int32_t stride, void *pixels)
-{
-   FILE *f = NULL;
-   png_structp png_writer = NULL;
-   png_infop png_info = NULL;
-
-   uint8_t *rows[height];
-
-   for (int32_t y = 0; y < height; y++)
-      rows[y] = pixels + y * stride;
-
-   f = fopen(path, "wb");
-   fail_if(!f, "failed to open file for writing: %s", path);
-
-   png_writer = png_create_write_struct(PNG_LIBPNG_VER_STRING,
-                                        NULL, NULL, NULL);
-   fail_if (!png_writer, "failed to create png writer");
-
-   png_info = png_create_info_struct(png_writer);
-   fail_if(!png_info, "failed to create png writer info");
-
-   png_init_io(png_writer, f);
-   png_set_IHDR(png_writer, png_info,
-                width, height,
-                8, PNG_COLOR_TYPE_RGBA,
-                PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
-                PNG_FILTER_TYPE_DEFAULT);
-   png_write_info(png_writer, png_info);
-   png_set_rows(png_writer, png_info, rows);
-   png_set_write_user_transform_fn(png_writer, convert_to_bytes);
-   png_write_png(png_writer, png_info, PNG_TRANSFORM_IDENTITY, NULL);
-
-   png_destroy_write_struct(&png_writer, &png_info);
-
-   fclose(f);
-}
-
-static void
-handle_signal(int sig)
-{
-   restore_vt();
-}
-
-static void
-init_vt(struct vkcube *vc)
-{
-   struct termios tio;
-   struct stat buf;
-   int ret;
-
-   /* First, save term io setting so we can restore properly. */
-   tcgetattr(STDIN_FILENO, &save_tio);
-
-   /* Make sure we're on a vt. */
-   ret = fstat(STDIN_FILENO, &buf);
-   fail_if(ret == -1, "failed to stat stdin\n");
-
-   if (major(buf.st_rdev) != TTY_MAJOR) {
-      fprintf(stderr, "stdin not a vt, running in no-display mode\n");
-      vc->no_display = true;
-      return;
-   }
-
-   /* Set console input to raw mode. */
-   tio = save_tio;
-   tio.c_lflag &= ~(ICANON | ECHO);
-   tcsetattr(STDIN_FILENO, TCSANOW, &tio);
-
-   /* Restore console on SIGINT and friends. */
-   struct sigaction act = {
-      .sa_handler = handle_signal,
-      .sa_flags = SA_RESETHAND
-   };
-   sigaction(SIGINT, &act, NULL);
-   sigaction(SIGSEGV, &act, NULL);
-   sigaction(SIGABRT, &act, NULL);
-
-   /* We don't drop drm master, so block VT switching while we're
-    * running. Otherwise, switching to X on another VT will crash X when it
-    * fails to get drm master. */
-   struct vt_mode mode = { .mode = VT_PROCESS, .relsig = 0, .acqsig = 0 };
-   ret = ioctl(STDIN_FILENO, VT_SETMODE, &mode);
-   fail_if(ret == -1, "failed to take control of vt handling\n");
-
-   /* Set KD_GRAPHICS to disable fbcon while we render. */
-   ret = ioctl(STDIN_FILENO, KDSETMODE, KD_GRAPHICS);
-   fail_if(ret == -1, "failed to switch console to graphics mode\n");
-}
-
-static void
-init_kms(struct vkcube *vc)
-{
-   if (vc->no_display) {
-      vc->width = 1024;
-      vc->height = 768;
-      vc->fd = open("/dev/dri/renderD128", O_RDWR);
-      fail_if(vc->fd == -1, "failed to open /dev/dri/renderD128\n");
-      vc->gbm_device = gbm_create_device(vc->fd);
-   } else {
-      drmModeRes *resources;
-      drmModeConnector *connector;
-      drmModeEncoder *encoder;
-      int i;
-
-      vc->fd = open("/dev/dri/card0", O_RDWR);
-      fail_if(vc->fd == -1, "failed to open /dev/dri/card0\n");
-
-      /* Get KMS resources and find the first active connecter. We'll use that
-         connector and the crtc driving it in the mode it's currently running. */
-      resources = drmModeGetResources(vc->fd);
-      fail_if(!resources, "drmModeGetResources failed: %s\n", strerror(errno));
-
-      for (i = 0; i < resources->count_connectors; i++) {
-         connector = drmModeGetConnector(vc->fd, resources->connectors[i]);
-         if (connector->connection == DRM_MODE_CONNECTED)
-            break;
-         drmModeFreeConnector(connector);
-         connector = NULL;
-      }
-
-      fail_if(!connector, "no connected connector!\n");
-      encoder = drmModeGetEncoder(vc->fd, connector->encoder_id);
-      fail_if(!encoder, "failed to get encoder\n");
-      vc->crtc = drmModeGetCrtc(vc->fd, encoder->crtc_id);
-      fail_if(!vc->crtc, "failed to get crtc\n");
-      printf("mode info: hdisplay %d, vdisplay %d\n",
-             vc->crtc->mode.hdisplay, vc->crtc->mode.vdisplay);
-
-      vc->connector = connector;
-      vc->width = vc->crtc->mode.hdisplay;
-      vc->height = vc->crtc->mode.vdisplay;
-
-      vc->gbm_device = gbm_create_device(vc->fd);
-   }
 }
 
 struct ubo {
@@ -695,77 +544,18 @@ init_vk(struct vkcube *vc)
                              }
                           }
                        });
+
+   vkCreateFence(vc->device,
+                 &(VkFenceCreateInfo) {
+                    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                    .flags = 0
+                 },
+                 &vc->fence);
 }
 
 static void
 init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
 {
-   uint32_t stride;
-   int fd, ret;
-
-   if (vc->no_display) {
-      vkCreateImage(vc->device,
-                    &(VkImageCreateInfo) {
-                       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-                       .imageType = VK_IMAGE_TYPE_2D,
-                       .format = VK_FORMAT_B8G8R8A8_UNORM,
-                       .extent = { .width = vc->width, .height = vc->height, .depth = 1 },
-                       .mipLevels = 1,
-                       .arraySize = 1,
-                       .samples = 1,
-                       .tiling = VK_IMAGE_TILING_LINEAR,
-                       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                       .flags = 0,
-                    },
-                    &b->image);
-
-      VkMemoryRequirements requirements;
-      size_t size = sizeof(requirements);
-      vkGetObjectInfo(vc->device, VK_OBJECT_TYPE_IMAGE, b->image,
-                      VK_OBJECT_INFO_TYPE_MEMORY_REQUIREMENTS,
-                      &size, &requirements);
-
-      vkAllocMemory(vc->device,
-                    &(VkMemoryAllocInfo) {
-                       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOC_INFO,
-                       .allocationSize = requirements.size,
-                       .memProps = VK_MEMORY_PROPERTY_HOST_DEVICE_COHERENT_BIT,
-                       .memPriority = VK_MEMORY_PRIORITY_NORMAL
-                    },
-                    &b->mem);
-
-      vkQueueBindObjectMemory(vc->queue, VK_OBJECT_TYPE_IMAGE,
-                              b->image, 0, b->mem, 0);
-
-      b->stride = vc->width * 4;
-   } else {
-      b->gbm_bo = gbm_bo_create(vc->gbm_device, vc->width, vc->height,
-                                GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
-
-      fd = gbm_bo_get_fd(b->gbm_bo);
-      stride = gbm_bo_get_stride(b->gbm_bo);
-      vkCreateDmaBufImageINTEL(vc->device,
-                               &(VkDmaBufImageCreateInfo) {
-                                  .sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
-                                  .fd = fd,
-                                  .format = VK_FORMAT_R8G8B8A8_UNORM,
-                                  .extent = { vc->width, vc->height, 1 },
-                                  .strideInBytes = stride
-                                },
-                               &b->mem,
-                               &b->image);
-      close(fd);
-
-      b->stride = gbm_bo_get_stride(b->gbm_bo);
-      uint32_t bo_handles[4] = { gbm_bo_get_handle(b->gbm_bo).s32, };
-      uint32_t pitches[4] = { stride, };
-      uint32_t offsets[4] = { 0, };
-      ret = drmModeAddFB2(vc->fd, vc->width, vc->height,
-                          DRM_FORMAT_XRGB8888, bo_handles,
-                          pitches, offsets, &b->fb, 0);
-      fail_if(ret == -1, "addfb2 failed\n");
-   }
-
    vkCreateColorAttachmentView(vc->device,
                                &(VkColorAttachmentViewCreateInfo) {
                                   .sType = VK_STRUCTURE_TYPE_COLOR_ATTACHMENT_VIEW_CREATE_INFO,
@@ -799,29 +589,22 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
 }
 
 static void
-write_buffer(struct vkcube *vc, struct vkcube_buffer *b)
-{
-   static const char filename[] = "cube.png";
-   uint32_t mem_size = b->stride * vc->height;
-   void *map;
-
-   vkMapMemory(vc->device, b->mem, 0, mem_size, 0, &map);
-
-   fprintf(stderr, "writing first frame to %s\n", filename);
-   write_png(filename, vc->width, vc->height, b->stride, map);
-}
-
-
-static void
-render_cube_frame(struct vkcube *vc, struct vkcube_buffer *b, int i)
+render_cube_frame(struct vkcube *vc, struct vkcube_buffer *b)
 {
    struct ubo ubo;
+   struct timeval tv;
+   uint64_t t;
+
+   gettimeofday(&tv, NULL);
+
+   t = ((tv.tv_sec * 1000 + tv.tv_usec / 1000) -
+        (vc->start_tv.tv_sec * 1000 + vc->start_tv.tv_usec / 1000)) / 5;
 
    esMatrixLoadIdentity(&ubo.modelview);
    esTranslate(&ubo.modelview, 0.0f, 0.0f, -8.0f);
-   esRotate(&ubo.modelview, 45.0f + (0.25f * i), 1.0f, 0.0f, 0.0f);
-   esRotate(&ubo.modelview, 45.0f - (0.5f * i), 0.0f, 1.0f, 0.0f);
-   esRotate(&ubo.modelview, 10.0f + (0.15f * i), 0.0f, 0.0f, 1.0f);
+   esRotate(&ubo.modelview, 45.0f + (0.25f * t), 1.0f, 0.0f, 0.0f);
+   esRotate(&ubo.modelview, 45.0f - (0.5f * t), 0.0f, 1.0f, 0.0f);
+   esRotate(&ubo.modelview, 10.0f + (0.15f * t), 0.0f, 0.0f, 1.0f);
 
    float aspect = (float) vc->height / (float) vc->width;
    ESMatrix projection;
@@ -911,24 +694,270 @@ render_cube_frame(struct vkcube *vc, struct vkcube_buffer *b, int i)
 
    vkEndCommandBuffer(cmd_buffer);
 
-   vkQueueSubmit(vc->queue, 1, &cmd_buffer, 0);
+   vkQueueSubmit(vc->queue, 1, &cmd_buffer, vc->fence);
 
-   vkQueueWaitIdle(vc->queue);
+   vkWaitForFences(vc->device, 1, (VkFence[]) { vc->fence }, true, INT64_MAX);
 
    vkDestroyObject(vc->device, VK_OBJECT_TYPE_COMMAND_BUFFER, cmd_buffer);
    vkDestroyObject(vc->device, VK_OBJECT_TYPE_RENDER_PASS, render_pass);
 }
 
-static void
-present(struct vkcube *vc, struct vkcube_buffer *b, int i)
-{
-   render_cube_frame(vc, b, i);
+/* Headless code - write one frame to png */
 
-   if (vc->no_display) {
-      write_buffer(vc, b);
-   } else {
-      drmModePageFlip(vc->fd, vc->crtc->crtc_id, b->fb,
-                      DRM_MODE_PAGE_FLIP_EVENT, NULL);
+static void
+convert_to_bytes(png_structp png, png_row_infop row_info, png_bytep data)
+{
+   for (uint32_t i = 0; i < row_info->rowbytes; i += 4) {
+      uint8_t *b = &data[i];
+      uint32_t pixel;
+
+      memcpy (&pixel, b, sizeof (uint32_t));
+      b[0] = (pixel & 0xff0000) >> 16;
+      b[1] = (pixel & 0x00ff00) >>  8;
+      b[2] = (pixel & 0x0000ff) >>  0;
+      b[3] = 0xff;
+   }
+}
+
+static void
+write_png(const char *path, int32_t width, int32_t height, int32_t stride, void *pixels)
+{
+   FILE *f = NULL;
+   png_structp png_writer = NULL;
+   png_infop png_info = NULL;
+
+   uint8_t *rows[height];
+
+   for (int32_t y = 0; y < height; y++)
+      rows[y] = pixels + y * stride;
+
+   f = fopen(path, "wb");
+   fail_if(!f, "failed to open file for writing: %s", path);
+
+   png_writer = png_create_write_struct(PNG_LIBPNG_VER_STRING,
+                                        NULL, NULL, NULL);
+   fail_if (!png_writer, "failed to create png writer");
+
+   png_info = png_create_info_struct(png_writer);
+   fail_if(!png_info, "failed to create png writer info");
+
+   png_init_io(png_writer, f);
+   png_set_IHDR(png_writer, png_info,
+                width, height,
+                8, PNG_COLOR_TYPE_RGBA,
+                PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
+                PNG_FILTER_TYPE_DEFAULT);
+   png_write_info(png_writer, png_info);
+   png_set_rows(png_writer, png_info, rows);
+   png_set_write_user_transform_fn(png_writer, convert_to_bytes);
+   png_write_png(png_writer, png_info, PNG_TRANSFORM_IDENTITY, NULL);
+
+   png_destroy_write_struct(&png_writer, &png_info);
+
+   fclose(f);
+}
+
+static void
+write_buffer(struct vkcube *vc, struct vkcube_buffer *b)
+{
+   static const char filename[] = "cube.png";
+   uint32_t mem_size = b->stride * vc->height;
+   void *map;
+
+   vkMapMemory(vc->device, b->mem, 0, mem_size, 0, &map);
+
+   fprintf(stderr, "writing first frame to %s\n", filename);
+   write_png(filename, vc->width, vc->height, b->stride, map);
+}
+
+static void
+init_headless(struct vkcube *vc)
+{
+   init_vk(vc);
+
+   struct vkcube_buffer *b = &vc->buffers[0];
+
+   vkCreateImage(vc->device,
+                 &(VkImageCreateInfo) {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                    .imageType = VK_IMAGE_TYPE_2D,
+                    .format = VK_FORMAT_B8G8R8A8_UNORM,
+                    .extent = { .width = vc->width, .height = vc->height, .depth = 1 },
+                    .mipLevels = 1,
+                    .arraySize = 1,
+                    .samples = 1,
+                    .tiling = VK_IMAGE_TILING_LINEAR,
+                    .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                    .flags = 0,
+                 },
+                 &b->image);
+
+   VkMemoryRequirements requirements;
+   size_t size = sizeof(requirements);
+   vkGetObjectInfo(vc->device, VK_OBJECT_TYPE_IMAGE, b->image,
+                   VK_OBJECT_INFO_TYPE_MEMORY_REQUIREMENTS,
+                   &size, &requirements);
+
+   vkAllocMemory(vc->device,
+                 &(VkMemoryAllocInfo) {
+                    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOC_INFO,
+                    .allocationSize = requirements.size,
+                    .memProps = VK_MEMORY_PROPERTY_HOST_DEVICE_COHERENT_BIT,
+                    .memPriority = VK_MEMORY_PRIORITY_NORMAL
+                 },
+                 &b->mem);
+
+   vkQueueBindObjectMemory(vc->queue, VK_OBJECT_TYPE_IMAGE,
+                           b->image, 0, b->mem, 0);
+
+   b->stride = vc->width * 4;
+
+   init_buffer(vc, &vc->buffers[0]);
+}
+
+/* KMS display code - render to kernel modesetting fb */
+
+static struct termios save_tio;
+
+static void
+restore_vt(void)
+{
+   struct vt_mode mode = { .mode = VT_AUTO };
+   ioctl(STDIN_FILENO, VT_SETMODE, &mode);
+
+   tcsetattr(STDIN_FILENO, TCSANOW, &save_tio);
+   ioctl(STDIN_FILENO, KDSETMODE, KD_TEXT);
+}
+
+static void
+handle_signal(int sig)
+{
+   restore_vt();
+}
+
+static int
+init_vt(struct vkcube *vc)
+{
+   struct termios tio;
+   struct stat buf;
+   int ret;
+
+   /* First, save term io setting so we can restore properly. */
+   tcgetattr(STDIN_FILENO, &save_tio);
+
+   /* Make sure we're on a vt. */
+   ret = fstat(STDIN_FILENO, &buf);
+   fail_if(ret == -1, "failed to stat stdin\n");
+
+   if (major(buf.st_rdev) != TTY_MAJOR) {
+      fprintf(stderr, "stdin not a vt, running in no-display mode\n");
+      return -1;
+   }
+
+   atexit(restore_vt);
+
+   /* Set console input to raw mode. */
+   tio = save_tio;
+   tio.c_lflag &= ~(ICANON | ECHO);
+   tcsetattr(STDIN_FILENO, TCSANOW, &tio);
+
+   /* Restore console on SIGINT and friends. */
+   struct sigaction act = {
+      .sa_handler = handle_signal,
+      .sa_flags = SA_RESETHAND
+   };
+   sigaction(SIGINT, &act, NULL);
+   sigaction(SIGSEGV, &act, NULL);
+   sigaction(SIGABRT, &act, NULL);
+
+   /* We don't drop drm master, so block VT switching while we're
+    * running. Otherwise, switching to X on another VT will crash X when it
+    * fails to get drm master. */
+   struct vt_mode mode = { .mode = VT_PROCESS, .relsig = 0, .acqsig = 0 };
+   ret = ioctl(STDIN_FILENO, VT_SETMODE, &mode);
+   fail_if(ret == -1, "failed to take control of vt handling\n");
+
+   /* Set KD_GRAPHICS to disable fbcon while we render. */
+   ret = ioctl(STDIN_FILENO, KDSETMODE, KD_GRAPHICS);
+   fail_if(ret == -1, "failed to switch console to graphics mode\n");
+
+   return 0;
+}
+
+static void
+init_kms(struct vkcube *vc)
+{
+   drmModeRes *resources;
+   drmModeConnector *connector;
+   drmModeEncoder *encoder;
+   int i;
+
+   if (init_vt(vc) == -1)
+      return;
+
+   vc->fd = open("/dev/dri/card0", O_RDWR);
+   fail_if(vc->fd == -1, "failed to open /dev/dri/card0\n");
+
+   /* Get KMS resources and find the first active connecter. We'll use that
+      connector and the crtc driving it in the mode it's currently running. */
+   resources = drmModeGetResources(vc->fd);
+   fail_if(!resources, "drmModeGetResources failed: %s\n", strerror(errno));
+
+   for (i = 0; i < resources->count_connectors; i++) {
+      connector = drmModeGetConnector(vc->fd, resources->connectors[i]);
+      if (connector->connection == DRM_MODE_CONNECTED)
+         break;
+      drmModeFreeConnector(connector);
+      connector = NULL;
+   }
+
+   fail_if(!connector, "no connected connector!\n");
+   encoder = drmModeGetEncoder(vc->fd, connector->encoder_id);
+   fail_if(!encoder, "failed to get encoder\n");
+   vc->crtc = drmModeGetCrtc(vc->fd, encoder->crtc_id);
+   fail_if(!vc->crtc, "failed to get crtc\n");
+   printf("mode info: hdisplay %d, vdisplay %d\n",
+          vc->crtc->mode.hdisplay, vc->crtc->mode.vdisplay);
+
+   vc->connector = connector;
+   vc->width = vc->crtc->mode.hdisplay;
+   vc->height = vc->crtc->mode.vdisplay;
+
+   vc->gbm_device = gbm_create_device(vc->fd);
+
+   init_vk(vc);
+
+   for (uint32_t i = 0; i < 2; i++) {
+      struct vkcube_buffer *b = &vc->buffers[i];
+      int fd, stride, ret;
+
+      b->gbm_bo = gbm_bo_create(vc->gbm_device, vc->width, vc->height,
+                                GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+
+      fd = gbm_bo_get_fd(b->gbm_bo);
+      stride = gbm_bo_get_stride(b->gbm_bo);
+      vkCreateDmaBufImageINTEL(vc->device,
+                               &(VkDmaBufImageCreateInfo) {
+                                  .sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
+                                  .fd = fd,
+                                  .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                  .extent = { vc->width, vc->height, 1 },
+                                  .strideInBytes = stride
+                                },
+                               &b->mem,
+                               &b->image);
+      close(fd);
+
+      b->stride = gbm_bo_get_stride(b->gbm_bo);
+      uint32_t bo_handles[4] = { gbm_bo_get_handle(b->gbm_bo).s32, };
+      uint32_t pitches[4] = { stride, };
+      uint32_t offsets[4] = { 0, };
+      ret = drmModeAddFB2(vc->fd, vc->width, vc->height,
+                          DRM_FORMAT_XRGB8888, bo_handles,
+                          pitches, offsets, &b->fb, 0);
+      fail_if(ret == -1, "addfb2 failed\n");
+
+      init_buffer(vc, b);
    }
 }
 
@@ -938,45 +967,17 @@ page_flip_handler(int fd, unsigned int frame,
 {
 }
 
-int main(int argc, char *argv[])
+static void
+mainloop_vt(struct vkcube *vc)
 {
-   struct vkcube vc;
-   struct vkcube_buffer b[2];
-   int ret, i = 0;
-
-   vc.no_display = false;
-   if (argc > 1) {
-      if (strcmp(argv[1], "-n") == 0) {
-         vc.no_display = true;
-      } else {
-         fprintf(stderr, "usage: vkcube [-n]\n\n"
-		 "  -n  Don't initialize vt or kms, run headless.\n");
-	 exit(1);
-      }
-   }
-
-   if (!vc.no_display)
-      init_vt(&vc);
-
-   init_kms(&vc);
-
-   init_vk(&vc);
-
-   init_buffer(&vc, &b[0]);
-   init_buffer(&vc, &b[1]);
-
-   present(&vc, &b[i], i);
-   i++;
-
-   if (vc.no_display)
-      exit(0);
-
-   int len;
+   int len, ret;
    char buf[16];
    struct pollfd pfd[2];
+   struct vkcube_buffer *b;
+
    pfd[0].fd = STDIN_FILENO;
    pfd[0].events = POLLIN;
-   pfd[1].fd = vc.fd;
+   pfd[1].fd = vc->fd;
    pfd[1].events = POLLIN;
 
    drmEventContext evctx = {
@@ -984,29 +985,245 @@ int main(int argc, char *argv[])
       .page_flip_handler = page_flip_handler,
    };
 
-   do {
+   drmModePageFlip(vc->fd, vc->crtc->crtc_id, vc->buffers[0].fb,
+                   DRM_MODE_PAGE_FLIP_EVENT, NULL);
+
+   while (1) {
       ret = poll(pfd, 2, -1);
       fail_if(ret == -1, "poll failed\n");
       if (pfd[0].revents & POLLIN) {
          len = read(STDIN_FILENO, buf, sizeof(buf));
          switch (buf[0]) {
          case 'q':
-            goto out;
+            return;
          case '\e':
             if (len == 1)
-               goto out;
-            break;
+               return;
          }
       }
       if (pfd[1].revents & POLLIN) {
-         drmHandleEvent(vc.fd, &evctx);
-         present(&vc, &b[i & 1], i);
-         i++;
-      }
-   } while (1);
+         drmHandleEvent(vc->fd, &evctx);
+         b = &vc->buffers[vc->current & 1];
+         render_cube_frame(vc, b);
 
- out:
-   restore_vt();
+         drmModePageFlip(vc->fd, vc->crtc->crtc_id, b->fb,
+                         DRM_MODE_PAGE_FLIP_EVENT, NULL);
+         vc->current++;
+      }
+   }
+}
+
+/* XCB display code - render to X window */
+
+static xcb_atom_t
+get_atom(struct xcb_connection_t *conn, const char *name)
+{
+   xcb_intern_atom_cookie_t cookie;
+   xcb_intern_atom_reply_t *reply;
+   xcb_atom_t atom;
+
+   cookie = xcb_intern_atom(conn, 0, strlen(name), name);
+   reply = xcb_intern_atom_reply(conn, cookie, NULL);
+   if (reply)
+      atom = reply->atom;
+   else
+      atom = XCB_NONE;
+
+   free(reply);
+   return atom;
+}
+
+static void
+init_xcb(struct vkcube *vc)
+{
+   xcb_screen_iterator_t iter;
+   static const char title[] = "Vulkan Cube";
+
+   vc->conn = xcb_connect(0, 0);
+   if (xcb_connection_has_error(vc->conn))
+      return;
+
+   vc->window = xcb_generate_id(vc->conn);
+
+   uint32_t window_values[] = {
+      XCB_EVENT_MASK_EXPOSURE |
+      XCB_EVENT_MASK_STRUCTURE_NOTIFY |
+      XCB_EVENT_MASK_KEY_PRESS
+   };
+
+   iter = xcb_setup_roots_iterator(xcb_get_setup(vc->conn));
+
+   xcb_create_window(vc->conn,
+                     XCB_COPY_FROM_PARENT,
+                     vc->window,
+                     iter.data->root,
+                     0, 0,
+                     vc->width,
+                     vc->height,
+                     0,
+                     XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                     iter.data->root_visual,
+                     XCB_CW_EVENT_MASK, window_values);
+   
+   vc->atom_wm_protocols = get_atom(vc->conn, "WM_PROTOCOLS");
+   vc->atom_wm_delete_window = get_atom(vc->conn, "WM_DELETE_WINDOW");
+   xcb_change_property(vc->conn,
+                       XCB_PROP_MODE_REPLACE,
+                       vc->window,
+                       vc->atom_wm_protocols,
+                       XCB_ATOM_ATOM,
+                       32,
+                       1, &vc->atom_wm_delete_window);
+
+   xcb_change_property(vc->conn,
+                       XCB_PROP_MODE_REPLACE,
+                       vc->window,
+                       get_atom(vc->conn, "_NET_WM_NAME"),
+                       get_atom(vc->conn, "UTF8_STRING"),
+                       8, // sizeof(char),
+                       strlen(title), title);
+
+   xcb_map_window(vc->conn, vc->window);
+
+   xcb_flush(vc->conn);
+
+   init_vk(vc);
+
+   vkCreateSwapChainWSI(vc->device,
+                        &(VkSwapChainCreateInfoWSI) {
+                           .sType = VK_STRUCTURE_TYPE_SWAP_CHAIN_CREATE_INFO_WSI,
+                           .pNativeWindowSystemHandle = vc->conn,
+                              .pNativeWindowHandle = (void*) (intptr_t) vc->window,
+                           .displayCount = 0,
+                           .pDisplays = NULL,
+                           .imageCount = 2,
+                           .imageFormat = VK_FORMAT_B8G8R8A8_UNORM,
+                           .imageExtent = { vc->width, vc->height },
+                           .imageArraySize = 1,
+                           .imageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                           .swapModeFlags = 0
+                        },
+                        &vc->swap_chain);
+
+   size_t size = sizeof(vc->swap_chain_image_info);
+   vkGetSwapChainInfoWSI(vc->swap_chain,
+                         VK_SWAP_CHAIN_INFO_TYPE_PERSISTENT_IMAGES_WSI,                         
+                         &size, vc->swap_chain_image_info);
+
+   for (uint32_t i = 0; i < 2; i++) {
+      vc->buffers[i].image = vc->swap_chain_image_info[i].image;
+      vc->buffers[i].mem = vc->swap_chain_image_info[i].memory;
+      init_buffer(vc, &vc->buffers[i]);
+   }
+}
+
+static void
+schedule_xcb_repaint(struct vkcube *vc)
+{
+   xcb_client_message_event_t client_message;
+
+   client_message.response_type = XCB_CLIENT_MESSAGE;
+   client_message.format = 32;
+   client_message.window = vc->window;
+   client_message.type = XCB_ATOM_NOTICE;
+
+   xcb_send_event(vc->conn, 0, vc->window,
+                  0, (char *) &client_message);
+}
+
+static void
+mainloop_xcb(struct vkcube *vc)
+{
+   xcb_generic_event_t *event;
+   xcb_key_press_event_t *key_press;
+   xcb_client_message_event_t *client_message;
+   struct vkcube_buffer *b;
+
+   while (1) {
+      event = xcb_wait_for_event(vc->conn);
+      switch (event->response_type & 0x7f) {
+      case XCB_CLIENT_MESSAGE:
+         client_message = (xcb_client_message_event_t *) event;
+         if (client_message->window != vc->window)
+            break;
+
+         if (client_message->type == vc->atom_wm_protocols &&
+             client_message->data.data32[0] == vc->atom_wm_delete_window) {
+            exit(0);
+         }
+
+         if (client_message->type == XCB_ATOM_NOTICE) {
+            b = &vc->buffers[vc->current & 1];
+            render_cube_frame(vc, b);
+
+            vkQueuePresentWSI(vc->queue,
+                              &(VkPresentInfoWSI) {
+                                 .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_WSI,
+                                 .image = b->image,
+                                 .flipInterval = 0
+                              });
+
+            schedule_xcb_repaint(vc);
+            vc->current++;
+         }
+         break;
+
+      case XCB_EXPOSE:
+         schedule_xcb_repaint(vc);
+         break;
+
+      case XCB_KEY_PRESS:
+         key_press = (xcb_key_press_event_t *) event;
+
+         if (key_press->detail == 9)
+            exit(0);
+
+         break;
+      }
+
+      free(event);
+      xcb_flush(vc->conn);
+   }
+}
+
+int main(int argc, char *argv[])
+{
+   struct vkcube vc;
+   bool headless;
+
+   vc.gbm_device = NULL;
+   vc.window = XCB_NONE;
+   vc.width = 1024;
+   vc.height = 768;
+   gettimeofday(&vc.start_tv, NULL);
+
+   if (argc > 1) {
+      if (strcmp(argv[1], "-n") == 0) {
+         headless = true;
+      } else {
+         fprintf(stderr, "usage: vkcube [-n]\n\n"
+		 "  -n  Don't initialize vt or kms, run headless.\n");
+	 exit(1);
+      }
+   }
+
+   if (headless) {
+      init_headless(&vc);
+   } else {
+      init_xcb(&vc);
+      if (vc.window == XCB_NONE) {
+         init_kms(&vc);
+      }
+   }
+
+   if (vc.window) {
+      mainloop_xcb(&vc);
+   } else if (vc.gbm_device) {
+      mainloop_vt(&vc);
+   } else {
+      render_cube_frame(&vc, &vc.buffers[0]);
+      write_buffer(&vc, &vc.buffers[0]);
+   }
 
    return 0;
 }
