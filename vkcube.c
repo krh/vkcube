@@ -108,6 +108,7 @@ struct vkcube {
    VkBufferView ubo_view;
    VkDynamicVpState vp_state;
    VkDynamicRsState rs_state;
+   VkDynamicCbState cb_state;
    VkDescriptorSet descriptor_set;
    VkFence fence;
 
@@ -345,10 +346,20 @@ init_vk(struct vkcube *vc)
       .frontFace = VK_FRONT_FACE_CW
    };
 
+   VkPipelineCbStateCreateInfo cb_create_info = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_CB_STATE_CREATE_INFO,
+      .pNext = &rs_create_info,
+      .attachmentCount = 1,
+      .pAttachments = (VkPipelineCbAttachmentState []) {
+         { .channelWriteMask = VK_CHANNEL_A_BIT |
+              VK_CHANNEL_R_BIT | VK_CHANNEL_G_BIT | VK_CHANNEL_B_BIT },
+      }
+   };
+
    vkCreateGraphicsPipeline(vc->device,
                             &(VkGraphicsPipelineCreateInfo) {
                                .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-                               .pNext = &rs_create_info,
+                               .pNext = &cb_create_info,
                                .flags = 0,
                                .layout = vc->pipeline_layout
                             },
@@ -524,6 +535,12 @@ init_vk(struct vkcube *vc)
                               },
                               &vc->rs_state);   
 
+   vkCreateDynamicColorBlendState(vc->device,
+                                  &(VkDynamicCbStateCreateInfo) {
+                                     .sType = VK_STRUCTURE_TYPE_DYNAMIC_CB_STATE_CREATE_INFO
+                                  },
+                                  &vc->cb_state);
+
    vkAllocDescriptorSets(vc->device, 0 /* pool */,
                          VK_DESCRIPTOR_SET_USAGE_STATIC,
                          1, &set_layout, &vc->descriptor_set, &count);
@@ -682,6 +699,8 @@ render_cube_frame(struct vkcube *vc, struct vkcube_buffer *b)
                                VK_STATE_BIND_POINT_VIEWPORT, vc->vp_state);
    vkCmdBindDynamicStateObject(cmd_buffer,
                                VK_STATE_BIND_POINT_RASTER, vc->rs_state);
+   vkCmdBindDynamicStateObject(cmd_buffer,
+                               VK_STATE_BIND_POINT_COLOR_BLEND, vc->cb_state);
 
    vkCmdDraw(cmd_buffer, 0, 4, 0, 1);
    vkCmdDraw(cmd_buffer, 4, 4, 0, 1);
