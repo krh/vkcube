@@ -112,6 +112,7 @@ struct vkcube {
    VkDynamicColorBlendState cb_state;
    VkDescriptorSet descriptor_set;
    VkFence fence;
+   VkCmdPool cmd_pool;
 
    void *map;
    uint32_t vertex_offset, colors_offset, normals_offset;
@@ -623,6 +624,14 @@ init_vk(struct vkcube *vc)
                     .flags = 0
                  },
                  &vc->fence);
+
+   vkCreateCommandPool(vc->device,
+                       &(const VkCmdPoolCreateInfo) {
+                          .sType = VK_STRUCTURE_TYPE_CMD_POOL_CREATE_INFO,
+                          .queueFamilyIndex = 0,
+                          .flags = 0
+                       },
+                       &vc->cmd_pool);
 }
 
 static void
@@ -691,7 +700,7 @@ render_cube_frame(struct vkcube *vc, struct vkcube_buffer *b)
    vkCreateCommandBuffer(vc->device,
                          &(VkCmdBufferCreateInfo) {
                             .sType = VK_STRUCTURE_TYPE_CMD_BUFFER_CREATE_INFO,
-                            .cmdPool = (VkCmdPool) { 0 },
+                            .cmdPool = vc->cmd_pool,
                             .level = 0,
                          },
                          &cmd_buffer);
@@ -754,7 +763,7 @@ render_cube_frame(struct vkcube *vc, struct vkcube_buffer *b)
 
    vkWaitForFences(vc->device, 1, (VkFence[]) { vc->fence }, true, INT64_MAX);
 
-   vkDestroyCommandBuffer(vc->device, cmd_buffer);
+   vkResetCommandPool(vc->device, vc->cmd_pool, 0);
 }
 
 /* Headless code - write one frame to png */
