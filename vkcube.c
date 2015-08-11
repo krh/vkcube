@@ -1202,7 +1202,6 @@ mainloop_xcb(struct vkcube *vc)
             exit(0);
          }
 
-         break;
          if (client_message->type == XCB_ATOM_NOTICE) {
             b = &vc->buffers[vc->current & 1];
             render_cube_frame(vc, b);
