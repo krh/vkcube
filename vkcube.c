@@ -1044,8 +1044,14 @@ mainloop_vt(struct vkcube *vc)
       .page_flip_handler = page_flip_handler,
    };
 
-   drmModePageFlip(vc->fd, vc->crtc->crtc_id, vc->buffers[0].fb,
-                   DRM_MODE_PAGE_FLIP_EVENT, NULL);
+   ret = drmModeSetCrtc(vc->fd, vc->crtc->crtc_id, vc->buffers[0].fb,
+                        0, 0, &vc->connector->connector_id, 1, &vc->crtc->mode);
+   fail_if(ret < 0, "modeset failed: %m\n");
+
+
+   ret = drmModePageFlip(vc->fd, vc->crtc->crtc_id, vc->buffers[0].fb,
+                         DRM_MODE_PAGE_FLIP_EVENT, NULL);
+   fail_if(ret < 0, "pageflip failed: %m\n");
 
    while (1) {
       ret = poll(pfd, 2, -1);
@@ -1065,8 +1071,9 @@ mainloop_vt(struct vkcube *vc)
          b = &vc->buffers[vc->current & 1];
          render_cube_frame(vc, b);
 
-         drmModePageFlip(vc->fd, vc->crtc->crtc_id, b->fb,
-                         DRM_MODE_PAGE_FLIP_EVENT, NULL);
+         ret = drmModePageFlip(vc->fd, vc->crtc->crtc_id, b->fb,
+                               DRM_MODE_PAGE_FLIP_EVENT, NULL);
+         fail_if(ret < 0, "pageflip failed: %m\n");
          vc->current++;
       }
    }
