@@ -1235,7 +1235,6 @@ mainloop_xcb(struct vkcube *vc)
          break;
 
       case XCB_EXPOSE:
-         break;
          schedule_xcb_repaint(vc);
          break;
 
