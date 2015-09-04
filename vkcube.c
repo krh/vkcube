@@ -91,10 +91,13 @@ struct vkcube {
    int fd;
    struct gbm_device *gbm_device;
 
-   xcb_connection_t *conn;
-   xcb_window_t window;
-   xcb_atom_t atom_wm_protocols;
-   xcb_atom_t atom_wm_delete_window;
+   struct {
+      xcb_connection_t *conn;
+      xcb_window_t window;
+      xcb_atom_t atom_wm_protocols;
+      xcb_atom_t atom_wm_delete_window;
+   } xcb;
+
    VkSwapChainWSI swap_chain;
 
    drmModeCrtc *crtc;
@@ -1108,11 +1111,11 @@ init_xcb(struct vkcube *vc)
    xcb_screen_iterator_t iter;
    static const char title[] = "Vulkan Cube";
 
-   vc->conn = xcb_connect(0, 0);
-   if (xcb_connection_has_error(vc->conn))
+   vc->xcb.conn = xcb_connect(0, 0);
+   if (xcb_connection_has_error(vc->xcb.conn))
       return;
 
-   vc->window = xcb_generate_id(vc->conn);
+   vc->xcb.window = xcb_generate_id(vc->xcb.conn);
 
    uint32_t window_values[] = {
       XCB_EVENT_MASK_EXPOSURE |
@@ -1120,11 +1123,11 @@ init_xcb(struct vkcube *vc)
       XCB_EVENT_MASK_KEY_PRESS
    };
 
-   iter = xcb_setup_roots_iterator(xcb_get_setup(vc->conn));
+   iter = xcb_setup_roots_iterator(xcb_get_setup(vc->xcb.conn));
 
-   xcb_create_window(vc->conn,
+   xcb_create_window(vc->xcb.conn,
                      XCB_COPY_FROM_PARENT,
-                     vc->window,
+                     vc->xcb.window,
                      iter.data->root,
                      0, 0,
                      vc->width,
@@ -1134,27 +1137,27 @@ init_xcb(struct vkcube *vc)
                      iter.data->root_visual,
                      XCB_CW_EVENT_MASK, window_values);
    
-   vc->atom_wm_protocols = get_atom(vc->conn, "WM_PROTOCOLS");
-   vc->atom_wm_delete_window = get_atom(vc->conn, "WM_DELETE_WINDOW");
-   xcb_change_property(vc->conn,
+   vc->xcb.atom_wm_protocols = get_atom(vc->xcb.conn, "WM_PROTOCOLS");
+   vc->xcb.atom_wm_delete_window = get_atom(vc->xcb.conn, "WM_DELETE_WINDOW");
+   xcb_change_property(vc->xcb.conn,
                        XCB_PROP_MODE_REPLACE,
-                       vc->window,
-                       vc->atom_wm_protocols,
+                       vc->xcb.window,
+                       vc->xcb.atom_wm_protocols,
                        XCB_ATOM_ATOM,
                        32,
-                       1, &vc->atom_wm_delete_window);
+                       1, &vc->xcb.atom_wm_delete_window);
 
-   xcb_change_property(vc->conn,
+   xcb_change_property(vc->xcb.conn,
                        XCB_PROP_MODE_REPLACE,
-                       vc->window,
-                       get_atom(vc->conn, "_NET_WM_NAME"),
-                       get_atom(vc->conn, "UTF8_STRING"),
+                       vc->xcb.window,
+                       get_atom(vc->xcb.conn, "_NET_WM_NAME"),
+                       get_atom(vc->xcb.conn, "UTF8_STRING"),
                        8, // sizeof(char),
                        strlen(title), title);
 
-   xcb_map_window(vc->conn, vc->window);
+   xcb_map_window(vc->xcb.conn, vc->xcb.window);
 
-   xcb_flush(vc->conn);
+   xcb_flush(vc->xcb.conn);
 
    init_vk(vc);
 
@@ -1162,10 +1165,10 @@ init_xcb(struct vkcube *vc)
       .sType = VK_STRUCTURE_TYPE_SURFACE_DESCRIPTION_WINDOW_WSI,
       .platform = VK_PLATFORM_XCB_WSI,
       .pPlatformHandle = &(VkPlatformHandleXcbWSI) {
-         .connection = vc->conn,
+         .connection = vc->xcb.conn,
          .root = iter.data->root,
       },
-      .pPlatformWindow = (void*) (intptr_t) vc->window,
+      .pPlatformWindow = (void*) (intptr_t) vc->xcb.window,
    };
 
    VkBool32 supported;
@@ -1215,10 +1218,10 @@ schedule_xcb_repaint(struct vkcube *vc)
 
    client_message.response_type = XCB_CLIENT_MESSAGE;
    client_message.format = 32;
-   client_message.window = vc->window;
+   client_message.window = vc->xcb.window;
    client_message.type = XCB_ATOM_NOTICE;
 
-   xcb_send_event(vc->conn, 0, vc->window,
+   xcb_send_event(vc->xcb.conn, 0, vc->xcb.window,
                   0, (char *) &client_message);
 }
 
@@ -1230,15 +1233,15 @@ mainloop_xcb(struct vkcube *vc)
    xcb_client_message_event_t *client_message;
 
    while (1) {
-      event = xcb_wait_for_event(vc->conn);
+      event = xcb_wait_for_event(vc->xcb.conn);
       switch (event->response_type & 0x7f) {
       case XCB_CLIENT_MESSAGE:
          client_message = (xcb_client_message_event_t *) event;
-         if (client_message->window != vc->window)
+         if (client_message->window != vc->xcb.window)
             break;
 
-         if (client_message->type == vc->atom_wm_protocols &&
-             client_message->data.data32[0] == vc->atom_wm_delete_window) {
+         if (client_message->type == vc->xcb.atom_wm_protocols &&
+             client_message->data.data32[0] == vc->xcb.atom_wm_delete_window) {
             exit(0);
          }
 
@@ -1279,7 +1282,7 @@ mainloop_xcb(struct vkcube *vc)
       }
 
       free(event);
-      xcb_flush(vc->conn);
+      xcb_flush(vc->xcb.conn);
    }
 }
 
@@ -1289,7 +1292,7 @@ int main(int argc, char *argv[])
    bool headless;
 
    vc.gbm_device = NULL;
-   vc.window = XCB_NONE;
+   vc.xcb.window = XCB_NONE;
    vc.width = 1024;
    vc.height = 768;
    gettimeofday(&vc.start_tv, NULL);
@@ -1308,12 +1311,12 @@ int main(int argc, char *argv[])
       init_headless(&vc);
    } else {
       init_xcb(&vc);
-      if (vc.window == XCB_NONE) {
+      if (vc.xcb.window == XCB_NONE) {
          init_kms(&vc);
       }
    }
 
-   if (vc.window) {
+   if (vc.xcb.window) {
       mainloop_xcb(&vc);
    } else if (vc.gbm_device) {
       mainloop_vt(&vc);
