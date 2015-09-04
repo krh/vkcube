@@ -56,22 +56,26 @@
 #include <poll.h>
 #include <sys/time.h>
 #include <math.h>
+#include <assert.h>
 
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <drm/drm_fourcc.h>
 #include <libpng16/png.h>
 
+#include <xcb/xcb.h>
+
 #define VK_PROTOTYPES
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_intel.h>
-#include <vulkan/vk_wsi_lunarg.h>
-
-#include <xcb/xcb.h>
+#include <vulkan/vk_wsi_swapchain.h>
+#include <vulkan/vk_wsi_device_swapchain.h>
 
 #include <gbm.h>
 
 #include "esUtil.h"
+
+#define MAX_NUM_IMAGES 4
 
 struct vkcube_buffer {
    struct gbm_bo *gbm_bo;
@@ -92,13 +96,13 @@ struct vkcube {
    xcb_atom_t atom_wm_protocols;
    xcb_atom_t atom_wm_delete_window;
    VkSwapChainWSI swap_chain;
-   VkSwapChainImageInfoWSI swap_chain_image_info[2];
 
    drmModeCrtc *crtc;
    drmModeConnector *connector;
    uint32_t width, height;
 
    VkInstance instance;
+   VkPhysicalDevice physical_device;
    VkDevice device;
    VkRenderPass render_pass;
    VkQueue queue;
@@ -118,7 +122,7 @@ struct vkcube {
    uint32_t vertex_offset, colors_offset, normals_offset;
 
    struct timeval start_tv;
-   struct vkcube_buffer buffers[2];
+   struct vkcube_buffer buffers[MAX_NUM_IMAGES];
    int current;
 };
 
@@ -157,22 +161,21 @@ init_vk(struct vkcube *vc)
       &vc->instance);
 
    uint32_t count = 1;
-   VkPhysicalDevice physicalDevices[1];
-   vkEnumeratePhysicalDevices(vc->instance, &count, physicalDevices);
+   vkEnumeratePhysicalDevices(vc->instance, &count, &vc->physical_device);
    printf("%d physical devices\n", count);
 
    VkPhysicalDeviceProperties properties;
-   vkGetPhysicalDeviceProperties(physicalDevices[0], &properties);
+   vkGetPhysicalDeviceProperties(vc->physical_device, &properties);
    printf("vendor id %04x, device name %s\n",
           properties.vendorId, properties.deviceName);
 
-   vkCreateDevice(physicalDevices[0],
+   vkCreateDevice(vc->physical_device,
                   &(VkDeviceCreateInfo) {
                      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
                      .queueRecordCount = 1,
                      .pRequestedQueues = &(VkDeviceQueueCreateInfo) {
                         .queueFamilyIndex = 0,
-                        .queueCount = 1                       
+                        .queueCount = 1,
                      }
                   },
                   &vc->device);
@@ -1155,30 +1158,52 @@ init_xcb(struct vkcube *vc)
 
    init_vk(vc);
 
+   VkSurfaceDescriptionWindowWSI vk_window = {
+      .sType = VK_STRUCTURE_TYPE_SURFACE_DESCRIPTION_WINDOW_WSI,
+      .platform = VK_PLATFORM_XCB_WSI,
+      .pPlatformHandle = &(VkPlatformHandleXcbWSI) {
+         .connection = vc->conn,
+         .root = iter.data->root,
+      },
+      .pPlatformWindow = (void*) (intptr_t) vc->window,
+   };
+
+   VkBool32 supported;
+   vkGetPhysicalDeviceSurfaceSupportWSI(vc->physical_device, 0,
+                                        (VkSurfaceDescriptionWSI *)&vk_window,
+                                        &supported);
+   if (!supported) {
+      fprintf(stderr, "Vulkan not supported on given X window");
+      abort();
+   }
+
    vkCreateSwapChainWSI(vc->device,
                         &(VkSwapChainCreateInfoWSI) {
                            .sType = VK_STRUCTURE_TYPE_SWAP_CHAIN_CREATE_INFO_WSI,
-                           .pNativeWindowSystemHandle = vc->conn,
-                           .pNativeWindowHandle = (void*) (intptr_t) vc->window,
-                           .displayCount = 0,
-                           .pDisplays = NULL,
-                           .imageCount = 2,
+                           .pSurfaceDescription = (VkSurfaceDescriptionWSI *)&vk_window,
+                           .minImageCount = 2,
                            .imageFormat = VK_FORMAT_B8G8R8A8_UNORM,
                            .imageExtent = { vc->width, vc->height },
-                           .imageArraySize = 1,
                            .imageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                           .swapModeFlags = 0
-                        },
-                        &vc->swap_chain);
-      
-   size_t size = sizeof(vc->swap_chain_image_info);
-   vkGetSwapChainInfoWSI(vc->swap_chain,
-                         VK_SWAP_CHAIN_INFO_TYPE_PERSISTENT_IMAGES_WSI,                         
-                         &size, vc->swap_chain_image_info);
+                           .preTransform = VK_SURFACE_TRANSFORM_NONE_WSI,
+                           .imageArraySize = 1,
+                           .presentMode = VK_PRESENT_MODE_MAILBOX_WSI,
+                        }, &vc->swap_chain);
 
-   for (uint32_t i = 0; i < 2; i++) {
-      vc->buffers[i].image = vc->swap_chain_image_info[i].image;
-      vc->buffers[i].mem = vc->swap_chain_image_info[i].memory;
+   size_t size = 0;
+   vkGetSwapChainInfoWSI(vc->device, vc->swap_chain,
+                         VK_SWAP_CHAIN_INFO_TYPE_IMAGES_WSI,
+                         &size, NULL);
+   assert(size > 0);
+   const int image_count = size / sizeof(VkSwapChainImagePropertiesWSI);
+
+   VkSwapChainImagePropertiesWSI swap_chain_images[image_count];
+   vkGetSwapChainInfoWSI(vc->device, vc->swap_chain,
+                         VK_SWAP_CHAIN_INFO_TYPE_IMAGES_WSI,
+                         &size, swap_chain_images);
+
+   for (uint32_t i = 0; i < image_count; i++) {
+      vc->buffers[i].image = swap_chain_images[i].image;
       init_buffer(vc, &vc->buffers[i]);
    }
 }
@@ -1203,7 +1228,6 @@ mainloop_xcb(struct vkcube *vc)
    xcb_generic_event_t *event;
    xcb_key_press_event_t *key_press;
    xcb_client_message_event_t *client_message;
-   struct vkcube_buffer *b;
 
    while (1) {
       event = xcb_wait_for_event(vc->conn);
@@ -1219,18 +1243,25 @@ mainloop_xcb(struct vkcube *vc)
          }
 
          if (client_message->type == XCB_ATOM_NOTICE) {
-            b = &vc->buffers[vc->current & 1];
-            render_cube_frame(vc, b);
+            uint32_t index;
+            vkAcquireNextImageWSI(vc->device, vc->swap_chain, 60,
+                                  (VkSemaphore) { 0 }, &index);
+
+            render_cube_frame(vc, &vc->buffers[index]);
 
             vkQueuePresentWSI(vc->queue,
                               &(VkPresentInfoWSI) {
-                                 .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_WSI,
-                                 .image = b->image,
-                                 .flipInterval = 0
+                                 .sType = VK_STRUCTURE_TYPE_QUEUE_PRESENT_INFO_WSI,
+                                 .swapChainCount = 1,
+                                 .swapChains = (VkSwapChainWSI[]) {
+                                    vc->swap_chain,
+                                 },
+                                 .imageIndices = (uint32_t[]) {
+                                    index,
+                                 },
                               });
 
             schedule_xcb_repaint(vc);
-            vc->current++;
          }
          break;
 
