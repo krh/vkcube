@@ -65,6 +65,9 @@
 
 #include <xcb/xcb.h>
 
+#include <wayland-client.h>
+#include <xdg-shell-client-protocol.h>
+
 #define VK_PROTOTYPES
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_intel.h>
@@ -97,6 +100,14 @@ struct vkcube {
       xcb_atom_t atom_wm_protocols;
       xcb_atom_t atom_wm_delete_window;
    } xcb;
+
+   struct {
+      struct wl_display *display;
+      struct wl_compositor *compositor;
+      struct xdg_shell *shell;
+      struct wl_surface *surface;
+      struct xdg_surface *xdg_surface;
+   } wl;
 
    VkSwapChainWSI swap_chain;
 
@@ -1286,6 +1297,201 @@ mainloop_xcb(struct vkcube *vc)
    }
 }
 
+/* Wayland display code - render to Wayland window */
+
+static void
+handle_xdg_surface_configure(void *data, struct xdg_surface *surface,
+                             int32_t width, int32_t height,
+                             struct wl_array *states, uint32_t serial)
+{
+   xdg_surface_ack_configure(surface, serial);
+}
+
+static void
+handle_xdg_surface_delete(void *data, struct xdg_surface *xdg_surface)
+{
+}
+
+static const struct xdg_surface_listener xdg_surface_listener = {
+   handle_xdg_surface_configure,
+   handle_xdg_surface_delete,
+};
+
+static void
+handle_xdg_shell_ping(void *data, struct xdg_shell *shell, uint32_t serial)
+{
+   xdg_shell_pong(shell, serial);
+}
+
+static const struct xdg_shell_listener xdg_shell_listener = {
+   handle_xdg_shell_ping,
+};
+
+#define XDG_VERSION 5 /* The version of xdg-shell that we implement */
+
+static void
+registry_handle_global(void *data, struct wl_registry *registry,
+		       uint32_t name, const char *interface, uint32_t version)
+{
+   struct vkcube *vc = data;
+
+   if (strcmp(interface, "wl_compositor") == 0) {
+      vc->wl.compositor = wl_registry_bind(registry, name,
+                                           &wl_compositor_interface, 1);
+   } else if (strcmp(interface, "xdg_shell") == 0) {
+      vc->wl.shell = wl_registry_bind(registry, name, &xdg_shell_interface, 1);
+      xdg_shell_add_listener(vc->wl.shell, &xdg_shell_listener, vc);
+      xdg_shell_use_unstable_version(vc->wl.shell, XDG_VERSION);
+   }
+}
+
+static void
+registry_handle_global_remove(void *data, struct wl_registry *registry,
+			      uint32_t name)
+{
+}
+
+static const struct wl_registry_listener registry_listener = {
+   registry_handle_global,
+   registry_handle_global_remove
+};
+
+static void
+init_wayland(struct vkcube *vc)
+{
+   vc->wl.display = wl_display_connect(NULL);
+   if (!vc->wl.display)
+      return;
+
+   struct wl_registry *registry = wl_display_get_registry(vc->wl.display);
+   wl_registry_add_listener(registry, &registry_listener, vc);
+
+   /* Round-trip to get globals */
+   wl_display_roundtrip(vc->wl.display);
+
+   /* We don't need this anymore */
+   wl_registry_destroy(registry);
+
+   vc->wl.surface = wl_compositor_create_surface(vc->wl.compositor);
+
+   vc->wl.xdg_surface = xdg_shell_get_xdg_surface(vc->wl.shell,
+                                                  vc->wl.surface);
+   xdg_surface_add_listener(vc->wl.xdg_surface, &xdg_surface_listener, vc);
+   xdg_surface_set_title(vc->wl.xdg_surface, "vkcube");
+
+   init_vk(vc);
+
+   VkSurfaceDescriptionWindowWSI vk_window = {
+      .sType = VK_STRUCTURE_TYPE_SURFACE_DESCRIPTION_WINDOW_WSI,
+      .platform = VK_PLATFORM_WAYLAND_WSI,
+      .pPlatformHandle = vc->wl.display,
+      .pPlatformWindow = vc->wl.surface,
+   };
+
+   VkBool32 supported;
+   vkGetPhysicalDeviceSurfaceSupportWSI(vc->physical_device, 0,
+                                        (VkSurfaceDescriptionWSI *)&vk_window,
+                                        &supported);
+   if (!supported) {
+      fprintf(stderr, "Vulkan not supported on given Wayland surface");
+      abort();
+   }
+
+   size_t size = 0;
+   vkGetSurfaceInfoWSI(vc->device, (VkSurfaceDescriptionWSI *)&vk_window,
+                       VK_SURFACE_INFO_TYPE_FORMATS_WSI, &size, NULL);
+   assert(size > 0);
+
+   const int num_formats = size / sizeof(VkSurfaceFormatPropertiesWSI);
+   VkSurfaceFormatPropertiesWSI formats[num_formats];
+
+   vkGetSurfaceInfoWSI(vc->device, (VkSurfaceDescriptionWSI *)&vk_window,
+                       VK_SURFACE_INFO_TYPE_FORMATS_WSI, &size, formats);
+
+   vkGetPhysicalDeviceSurfaceSupportWSI(vc->physical_device, 0,
+                                        (VkSurfaceDescriptionWSI *)&vk_window,
+                                        &supported);
+
+   VkFormat format = VK_FORMAT_UNDEFINED;
+   for (int i = 0; i < num_formats; i++) {
+      switch (formats[i].format) {
+      case VK_FORMAT_R8G8B8A8_UNORM:
+      case VK_FORMAT_B8G8R8A8_UNORM:
+         /* These formats are all fine */
+         format = formats[i].format;
+         break;
+      case VK_FORMAT_R8G8B8_UNORM:
+      case VK_FORMAT_B8G8R8_UNORM:
+      case VK_FORMAT_R5G6B5_UNORM:
+      case VK_FORMAT_B5G6R5_UNORM:
+         /* We would like to support these but they don't seem to work. */
+      default:
+         continue;
+      }
+   }
+
+   assert(format != VK_FORMAT_UNDEFINED);
+
+   vkCreateSwapChainWSI(vc->device,
+                        &(VkSwapChainCreateInfoWSI) {
+                           .sType = VK_STRUCTURE_TYPE_SWAP_CHAIN_CREATE_INFO_WSI,
+                           .pSurfaceDescription = (VkSurfaceDescriptionWSI *)&vk_window,
+                           .minImageCount = 2,
+                           .imageFormat = format,
+                           .imageExtent = { vc->width, vc->height },
+                           .imageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                           .preTransform = VK_SURFACE_TRANSFORM_NONE_WSI,
+                           .imageArraySize = 1,
+                           .presentMode = VK_PRESENT_MODE_MAILBOX_WSI,
+                        }, &vc->swap_chain);
+
+   size = 0;
+   vkGetSwapChainInfoWSI(vc->device, vc->swap_chain,
+                         VK_SWAP_CHAIN_INFO_TYPE_IMAGES_WSI,
+                         &size, NULL);
+   assert(size > 0);
+   const int image_count = size / sizeof(VkSwapChainImagePropertiesWSI);
+
+   VkSwapChainImagePropertiesWSI swap_chain_images[image_count];
+   vkGetSwapChainInfoWSI(vc->device, vc->swap_chain,
+                         VK_SWAP_CHAIN_INFO_TYPE_IMAGES_WSI,
+                         &size, swap_chain_images);
+
+   for (uint32_t i = 0; i < image_count; i++) {
+      vc->buffers[i].image = swap_chain_images[i].image;
+      init_buffer(vc, &vc->buffers[i]);
+   }
+}
+
+static void
+mainloop_wayland(struct vkcube *vc)
+{
+   VkResult result = VK_SUCCESS;
+   while (1) {
+      uint32_t index;
+      result = vkAcquireNextImageWSI(vc->device, vc->swap_chain, 60,
+                                     (VkSemaphore) { 0 }, &index);
+      if (result != VK_SUCCESS)
+         return;
+
+      render_cube_frame(vc, &vc->buffers[index]);
+
+      vkQueuePresentWSI(vc->queue,
+                        &(VkPresentInfoWSI) {
+                           .sType = VK_STRUCTURE_TYPE_QUEUE_PRESENT_INFO_WSI,
+                           .swapChainCount = 1,
+                           .swapChains = (VkSwapChainWSI[]) {
+                              vc->swap_chain,
+                           },
+                           .imageIndices = (uint32_t[]) {
+                              index,
+                           },
+                        });
+      if (result != VK_SUCCESS)
+         return;
+   }
+}
+
 int main(int argc, char *argv[])
 {
    struct vkcube vc;
@@ -1293,6 +1499,7 @@ int main(int argc, char *argv[])
 
    vc.gbm_device = NULL;
    vc.xcb.window = XCB_NONE;
+   vc.wl.surface = NULL;
    vc.width = 1024;
    vc.height = 768;
    gettimeofday(&vc.start_tv, NULL);
@@ -1310,13 +1517,18 @@ int main(int argc, char *argv[])
    if (headless) {
       init_headless(&vc);
    } else {
-      init_xcb(&vc);
-      if (vc.xcb.window == XCB_NONE) {
-         init_kms(&vc);
+      init_wayland(&vc);
+      if (vc.wl.surface == NULL) {
+         init_xcb(&vc);
+         if (vc.xcb.window == XCB_NONE) {
+            init_kms(&vc);
+         }
       }
    }
 
-   if (vc.xcb.window) {
+   if (vc.wl.surface) {
+      mainloop_wayland(&vc);
+   } else if (vc.xcb.window) {
       mainloop_xcb(&vc);
    } else if (vc.gbm_device) {
       mainloop_vt(&vc);

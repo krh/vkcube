@@ -14,9 +14,10 @@ CXXFLAGS = -std=c++11 $(common_CFLAGS)
 noinst_PROGRAMS = vkcube
 
 vkcube_SOURCES =				\
+	xdg-shell-protocol.c			\
 	vkcube.c				\
 	esTransform.c				\
 	esUtil.h
 
-vkcube_CFLAGS = $(CFLAGS) $(MINIGBM_CPPFLAGS) $(LIBDRM_CFLAGS)
-vkcube_LDADD = $(MINIGBM_LDFLAGS) $(MESA_LDFLAGS) $(LIBDRM_LIBS) -lgbm -lm -lvulkan -lpng16 -lxcb
+vkcube_CFLAGS = $(CFLAGS) $(MINIGBM_CPPFLAGS) $(LIBDRM_CFLAGS) $(WAYLAND_CFLAGS)
+vkcube_LDADD = $(MINIGBM_LDFLAGS) $(MESA_LDFLAGS) $(LIBDRM_LIBS) $(WAYLAND_LIBS) -lgbm -lm -lvulkan -lpng16 -lxcb
