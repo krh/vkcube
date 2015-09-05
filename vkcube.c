@@ -161,6 +161,14 @@ struct ubo {
    float normal[12];
 };
 
+static char vs_spirv_source[] = {
+#include "vkcube.vert.spv.h"
+};
+
+static char fs_spirv_source[] = {
+#include "vkcube.frag.spv.h"
+};
+
 static void
 init_vk(struct vkcube *vc)
 {
@@ -313,48 +321,12 @@ init_vk(struct vkcube *vc)
       }      
    };
 
-#define GLSL(src) "#version 330\n" #src
-
-   static const char vs_source[] = GLSL(
-      layout(set = 0, index = 0) uniform block {
-          uniform mat4 modelviewMatrix;
-          uniform mat4 modelviewprojectionMatrix;
-          uniform mat3 normalMatrix;
-      };
-      
-      layout(location = 0) in vec4 in_position;
-      layout(location = 1) in vec4 in_color;
-      layout(location = 2) in vec3 in_normal;
-      
-      vec4 lightSource = vec4(2.0, 2.0, 20.0, 0.0);
-      
-      out vec4 vVaryingColor;
-      
-      void main()
-      {
-          gl_Position = modelviewprojectionMatrix * in_position;
-          vec3 vEyeNormal = normalMatrix * in_normal;
-          vec4 vPosition4 = modelviewMatrix * in_position;
-          vec3 vPosition3 = vPosition4.xyz / vPosition4.w;
-          vec3 vLightDir = normalize(lightSource.xyz - vPosition3);
-          float diff = max(0.0, dot(vEyeNormal, vLightDir));
-          vVaryingColor = vec4(diff * in_color.rgb, 1.0);
-      });
-
-   static const char fs_source[] = GLSL(
-      in vec4 vVaryingColor;
-      
-      void main()
-      {
-          gl_FragColor = vVaryingColor;
-      });
-
    VkShaderModule vs_module;
    vkCreateShaderModule(vc->device,
                         &(VkShaderModuleCreateInfo) {
                            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-                           .codeSize = sizeof(vs_source),
-                           .pCode = vs_source,
+                           .codeSize = sizeof(vs_spirv_source),
+                           .pCode = vs_spirv_source,
                         },
                         &vs_module);
 
@@ -371,8 +343,8 @@ init_vk(struct vkcube *vc)
    vkCreateShaderModule(vc->device,
                         &(VkShaderModuleCreateInfo) {
                            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-                           .codeSize = sizeof(fs_source),
-                           .pCode = fs_source,
+                           .codeSize = sizeof(fs_spirv_source),
+                           .pCode = fs_spirv_source,
                         },
                         &fs_module);
 

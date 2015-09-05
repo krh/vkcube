@@ -36,4 +36,13 @@ AC_SUBST([MINIGBM_LDFLAGS])
 PKG_CHECK_MODULES([LIBDRM], [libdrm])
 PKG_CHECK_MODULES([WAYLAND], [wayland-client])
 
+AC_ARG_VAR([GLSLC], [path to glslc executable])
+AC_SUBST([GLSLC])
+AC_CHECK_PROGS([GLSLC], [glslc])
+if test "x$GLSLC" = "x"; then
+    AC_MSG_ERROR([failed to find glslc])
+fi
+
+AC_CHECK_PROGS([XXD], [xxd])
+
 AC_OUTPUT(Makefile)

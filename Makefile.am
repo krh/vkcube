@@ -13,7 +13,15 @@ CXXFLAGS = -std=c++11 $(common_CFLAGS)
 
 noinst_PROGRAMS = vkcube
 
+BUILT_SOURCES = \
+	vkcube.vert.spv.h			\
+	vkcube.frag.spv.h
+
+%.spv.h: %
+	$(GLSLC) -o - $< | xxd -i > $@
+
 vkcube_SOURCES =				\
+	$(BUILT_SOURCES)			\
 	xdg-shell-protocol.c			\
 	vkcube.c				\
 	esTransform.c				\
