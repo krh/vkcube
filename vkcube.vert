@@ -1,6 +1,6 @@
 #version 420 core
 
-layout(set = 0, binding = 0) uniform block {
+layout(std140, set = 0, binding = 0) uniform block {
     uniform mat4 modelviewMatrix;
     uniform mat4 modelviewprojectionMatrix;
     uniform mat3 normalMatrix;
