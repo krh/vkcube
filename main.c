@@ -865,7 +865,7 @@ init_wayland(struct vkcube *vc)
                            .imageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                            .preTransform = VK_SURFACE_TRANSFORM_NONE_WSI,
                            .imageArraySize = 1,
-                           .presentMode = VK_PRESENT_MODE_MAILBOX_WSI,
+                           .presentMode = VK_PRESENT_MODE_FIFO_WSI,
                         }, &vc->swap_chain);
 
    size = 0;
