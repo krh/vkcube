@@ -27,5 +27,7 @@ vkcube_SOURCES =				\
 	esTransform.c				\
 	esUtil.h
 
+CLEANFILES = $(BUILT_SOURCES)
+
 vkcube_CFLAGS = $(CFLAGS) $(MINIGBM_CPPFLAGS) $(LIBDRM_CFLAGS) $(WAYLAND_CFLAGS)
 vkcube_LDADD = $(MINIGBM_LDFLAGS) $(MESA_LDFLAGS) $(LIBDRM_LIBS) $(WAYLAND_LIBS) -lgbm -lm -lvulkan -lpng16 -lxcb
