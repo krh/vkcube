@@ -23,7 +23,9 @@ BUILT_SOURCES = \
 vkcube_SOURCES =				\
 	$(BUILT_SOURCES)			\
 	xdg-shell-protocol.c			\
-	vkcube.c				\
+	main.c					\
+	common.h				\
+	cube.c					\
 	esTransform.c				\
 	esUtil.h
 
