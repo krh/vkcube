@@ -28,7 +28,7 @@ struct vkcube_buffer {
    struct gbm_bo *gbm_bo;
    VkDeviceMemory mem;
    VkImage image;
-   VkAttachmentView view;
+   VkImageView view;
    VkFramebuffer framebuffer;
    uint32_t fb;
    uint32_t stride;
@@ -78,9 +78,6 @@ struct vkcube {
    VkDeviceMemory mem;
    VkBuffer buffer;
    VkBufferView ubo_view;
-   VkDynamicViewportState vp_state;
-   VkDynamicRasterState rs_state;
-   VkDynamicColorBlendState cb_state;
    VkDescriptorSet descriptor_set;
    VkFence fence;
    VkCmdPool cmd_pool;

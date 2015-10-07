@@ -129,13 +129,13 @@ init_vk(struct vkcube *vc)
                .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
                .inputCount = 0,
                .colorCount = 1,
-               .colorAttachments = (VkAttachmentReference []) {
+               .pColorAttachments = (VkAttachmentReference []) {
                   {
                      .attachment = 0,
                      .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
                   }
                },
-               .resolveAttachments = (VkAttachmentReference []) {
+               .pResolveAttachments = (VkAttachmentReference []) {
                   {
                      .attachment = 0,
                      .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
@@ -145,7 +145,7 @@ init_vk(struct vkcube *vc)
                   .attachment = VK_ATTACHMENT_UNUSED
                },
                .preserveCount = 1,
-               .preserveAttachments = (VkAttachmentReference []) {
+               .pPreserveAttachments = (VkAttachmentReference []) {
                   {
                      .attachment = 0,
                      .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
@@ -178,27 +178,33 @@ init_vk(struct vkcube *vc)
 static void
 init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
 {
-   vkCreateAttachmentView(vc->device,
-                          &(VkAttachmentViewCreateInfo) {
-                             .sType = VK_STRUCTURE_TYPE_ATTACHMENT_VIEW_CREATE_INFO,
-                             .image = b->image,
-                             .format = VK_FORMAT_B8G8R8A8_UNORM,
-                             .mipLevel = 0,
-                             .baseArraySlice = 0,
-                             .arraySize = 1,
-                          },
-                          &b->view);
+   vkCreateImageView(vc->device,
+                     &(VkImageViewCreateInfo) {
+                        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                        .image = b->image,
+                        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                        .format = VK_FORMAT_B8G8R8A8_UNORM,
+                        .channels = {
+                           .r = VK_CHANNEL_SWIZZLE_R,
+                           .g = VK_CHANNEL_SWIZZLE_G,
+                           .b = VK_CHANNEL_SWIZZLE_B,
+                           .a = VK_CHANNEL_SWIZZLE_A,
+                        },
+                        .subresourceRange = {
+                           .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                           .baseMipLevel = 0,
+                           .mipLevels = 0,
+                           .baseArrayLayer = 0,
+                           .arraySize = 1,
+                        },
+                     },
+                     &b->view);
    
    vkCreateFramebuffer(vc->device,
                        &(VkFramebufferCreateInfo) {
                           .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
                           .attachmentCount = 1,
-                          .pAttachments = (VkAttachmentBindInfo[]) {
-                             {
-                                .view = b->view,
-                                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-                             }
-                          },
+                          .pAttachments = &b->view,
                           .width = vc->width,
                           .height = vc->height,
                           .layers = 1

@@ -334,49 +334,15 @@ init_cube(struct vkcube *vc)
                       &(VkBufferViewCreateInfo) {
                          .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
                          .buffer = vc->buffer,
-                         .viewType = VK_BUFFER_VIEW_TYPE_RAW,
                          .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                          .offset = 0,
                          .range = sizeof(struct ubo)
                       },
                       &vc->ubo_view);
 
-   vkCreateDynamicViewportState(vc->device,
-                                &(VkDynamicViewportStateCreateInfo) {
-                                   .sType = VK_STRUCTURE_TYPE_DYNAMIC_VIEWPORT_STATE_CREATE_INFO,
-                                   .viewportAndScissorCount = 1,
-                                   .pViewports = (VkViewport[]) {
-                                      {
-                                         .originX = 0,
-                                         .originY = 0,
-                                         .width = vc->width,
-                                         .height = vc->height,
-                                         .minDepth = 0,
-                                         .maxDepth = 1
-                                      }
-                                   },
-                                   .pScissors = (VkRect2D[]) {
-                                      { {  0,  0 }, { vc->width, vc->height } },
-                                   }
-                                },
-                                &vc->vp_state);
-
-   vkCreateDynamicRasterState(vc->device,
-                              &(VkDynamicRasterStateCreateInfo) {
-                                 .sType = VK_STRUCTURE_TYPE_DYNAMIC_RASTER_STATE_CREATE_INFO,
-                              },
-                              &vc->rs_state);
-
-   vkCreateDynamicColorBlendState(vc->device,
-                                  &(VkDynamicColorBlendStateCreateInfo) {
-                                     .sType = VK_STRUCTURE_TYPE_DYNAMIC_COLOR_BLEND_STATE_CREATE_INFO
-                                  },
-                                  &vc->cb_state);
-
-   uint32_t count;
    vkAllocDescriptorSets(vc->device, (VkDescriptorPool) { 0 },
                          VK_DESCRIPTOR_SET_USAGE_STATIC,
-                         1, &set_layout, &vc->descriptor_set, &count);
+                         1, &set_layout, &vc->descriptor_set);
 
    vkUpdateDescriptorSets(vc->device, 1,
                           (VkWriteDescriptorSet []) {
@@ -449,9 +415,9 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
                            .renderPass = vc->render_pass,
                            .framebuffer = b->framebuffer,
                            .renderArea = { { 0, 0 }, { vc->width, vc->height } },
-                           .attachmentCount = 1,
-                           .pAttachmentClearValues = (VkClearValue []) {
-                              { .color = { .f32 = { 0.2f, 0.2f, 0.2f, 1.0f } } }
+                           .clearValueCount = 1,
+                           .pClearValues = (VkClearValue []) {
+                              { .color = { .float32 = { 0.2f, 0.2f, 0.2f, 1.0f } } }
                            }
                         },
                         VK_RENDER_PASS_CONTENTS_INLINE);
@@ -476,16 +442,12 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
                            0, 1,
                            &vc->descriptor_set, 0, NULL);
 
-   vkCmdBindDynamicViewportState(cmd_buffer, vc->vp_state);
-   vkCmdBindDynamicRasterState(cmd_buffer, vc->rs_state);
-   vkCmdBindDynamicColorBlendState(cmd_buffer, vc->cb_state);
-
-   vkCmdDraw(cmd_buffer, 0, 4, 0, 1);
-   vkCmdDraw(cmd_buffer, 4, 4, 0, 1);
-   vkCmdDraw(cmd_buffer, 8, 4, 0, 1);
-   vkCmdDraw(cmd_buffer, 12, 4, 0, 1);
-   vkCmdDraw(cmd_buffer, 16, 4, 0, 1);
-   vkCmdDraw(cmd_buffer, 20, 4, 0, 1);
+   vkCmdDraw(cmd_buffer, 4, 1, 0, 0);
+   vkCmdDraw(cmd_buffer, 4, 1, 4, 0);
+   vkCmdDraw(cmd_buffer, 4, 1, 8, 0);
+   vkCmdDraw(cmd_buffer, 4, 1, 12, 0);
+   vkCmdDraw(cmd_buffer, 4, 1, 16, 0);
+   vkCmdDraw(cmd_buffer, 4, 1, 20, 0);
 
    vkCmdEndRenderPass(cmd_buffer);
 
