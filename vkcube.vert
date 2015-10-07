@@ -12,7 +12,7 @@ layout(location = 2) in vec3 in_normal;
 
 vec4 lightSource = vec4(2.0, 2.0, 20.0, 0.0);
 
-out vec4 vVaryingColor;
+layout(location = 0) out vec4 vVaryingColor;
 
 void main()
 {

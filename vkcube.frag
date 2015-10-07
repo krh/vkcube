@@ -1,6 +1,6 @@
 #version 420 core
 
-in vec4 vVaryingColor;
+layout(location = 0) in vec4 vVaryingColor;
 
 void main()
 {
