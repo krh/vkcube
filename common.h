@@ -15,8 +15,8 @@
 #define VK_PROTOTYPES
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_intel.h>
-#include <vulkan/vk_wsi_swapchain.h>
-#include <vulkan/vk_wsi_device_swapchain.h>
+#include <vulkan/vk_ext_khr_swapchain.h>
+#include <vulkan/vk_ext_khr_device_swapchain.h>
 
 #include <gbm.h>
 
@@ -62,7 +62,7 @@ struct vkcube {
       struct xdg_surface *xdg_surface;
    } wl;
 
-   VkSwapChainWSI swap_chain;
+   VkSwapchainKHR swap_chain;
 
    drmModeCrtc *crtc;
    drmModeConnector *connector;
