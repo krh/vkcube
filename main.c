@@ -80,7 +80,7 @@ init_vk(struct vkcube *vc)
          .pAppInfo = &(VkApplicationInfo) {
             .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
             .pAppName = "vkcube",
-            .apiVersion = 1
+            .apiVersion = VK_MAKE_VERSION(0, 170, 2),
          }
       },
       &vc->instance);
