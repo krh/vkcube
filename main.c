@@ -608,7 +608,7 @@ init_xcb(struct vkcube *vc)
          .connection = vc->xcb.conn,
          .root = iter.data->root,
       },
-      .pPlatformWindow = (void*) (intptr_t) vc->xcb.window,
+      .pPlatformWindow = &vc->xcb.window,
    };
 
    VkBool32 supported;
