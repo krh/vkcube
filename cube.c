@@ -124,6 +124,7 @@ init_cube(struct vkcube *vc)
                      .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO,
                      .module = vs_module,
                      .pName = "main",
+                     .stage = VK_SHADER_STAGE_VERTEX,
                   },
                   &vs);
 
@@ -141,7 +142,8 @@ init_cube(struct vkcube *vc)
                   &(VkShaderCreateInfo) {
                      .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO,
                      .module = fs_module,
-                     .pName = "main"
+                     .pName = "main",
+                     .stage = VK_SHADER_STAGE_FRAGMENT,
                   },
                   &fs);
 
