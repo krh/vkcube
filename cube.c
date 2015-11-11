@@ -332,16 +332,6 @@ init_cube(struct vkcube *vc)
 
    vkBindBufferMemory(vc->device, vc->buffer, vc->mem, 0);
 
-   vkCreateBufferView(vc->device,
-                      &(VkBufferViewCreateInfo) {
-                         .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
-                         .buffer = vc->buffer,
-                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-                         .offset = 0,
-                         .range = sizeof(struct ubo)
-                      },
-                      &vc->ubo_view);
-
    vkAllocDescriptorSets(vc->device, (VkDescriptorPool) { 0 },
                          VK_DESCRIPTOR_SET_USAGE_STATIC,
                          1, &set_layout, &vc->descriptor_set);
@@ -357,7 +347,7 @@ init_cube(struct vkcube *vc)
                                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                                 .pDescriptors = (VkDescriptorInfo []) {
                                    {
-                                      .bufferView = vc->ubo_view,
+                                      .bufferInfo = { vc->buffer, 0, sizeof(struct ubo) }
                                    }
                                 }
                              }

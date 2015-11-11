@@ -77,7 +77,6 @@ struct vkcube {
    VkPipeline pipeline;
    VkDeviceMemory mem;
    VkBuffer buffer;
-   VkBufferView ubo_view;
    VkDescriptorSet descriptor_set;
    VkFence fence;
    VkCmdPool cmd_pool;
