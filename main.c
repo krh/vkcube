@@ -77,12 +77,13 @@ init_vk(struct vkcube *vc)
 {
    vkCreateInstance(&(VkInstanceCreateInfo) {
          .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-         .pAppInfo = &(VkApplicationInfo) {
+         .pApplicationInfo = &(VkApplicationInfo) {
             .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-            .pAppName = "vkcube",
-            .apiVersion = VK_MAKE_VERSION(0, 170, 2),
+            .pApplicationName = "vkcube",
+            .apiVersion = VK_MAKE_VERSION(0, 210, 1),
          }
       },
+      NULL,
       &vc->instance);
 
    uint32_t count = 1;
@@ -92,17 +93,18 @@ init_vk(struct vkcube *vc)
    VkPhysicalDeviceProperties properties;
    vkGetPhysicalDeviceProperties(vc->physical_device, &properties);
    printf("vendor id %04x, device name %s\n",
-          properties.vendorId, properties.deviceName);
+          properties.vendorID, properties.deviceName);
 
    vkCreateDevice(vc->physical_device,
                   &(VkDeviceCreateInfo) {
                      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-                     .queueRecordCount = 1,
-                     .pRequestedQueues = &(VkDeviceQueueCreateInfo) {
+                     .queueCreateInfoCount = 1,
+                     .pQueueCreateInfos = &(VkDeviceQueueCreateInfo) {
                         .queueFamilyIndex = 0,
                         .queueCount = 1,
                      }
                   },
+                  NULL,
                   &vc->device);
 
    vkGetDeviceQueue(vc->device, 0, 0, &vc->queue);
@@ -113,7 +115,6 @@ init_vk(struct vkcube *vc)
          .attachmentCount = 1,
          .pAttachments = (VkAttachmentDescription[]) {
             {
-               .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION,
                .format = VK_FORMAT_R8G8B8A8_UNORM,
                .samples = 1,
                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -125,10 +126,9 @@ init_vk(struct vkcube *vc)
          .subpassCount = 1,
          .pSubpasses = (VkSubpassDescription []) {
             {
-               .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION,
                .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-               .inputCount = 0,
-               .colorCount = 1,
+               .inputAttachmentCount = 0,
+               .colorAttachmentCount = 1,
                .pColorAttachments = (VkAttachmentReference []) {
                   {
                      .attachment = 0,
@@ -141,10 +141,10 @@ init_vk(struct vkcube *vc)
                      .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
                   }
                },
-               .depthStencilAttachment = (VkAttachmentReference) {
+               .pDepthStencilAttachment = &(VkAttachmentReference) {
                   .attachment = VK_ATTACHMENT_UNUSED
                },
-               .preserveCount = 1,
+               .preserveAttachmentCount = 1,
                .pPreserveAttachments = (VkAttachmentReference []) {
                   {
                      .attachment = 0,
@@ -155,6 +155,7 @@ init_vk(struct vkcube *vc)
          },
          .dependencyCount = 0
       },
+      NULL,
       &vc->render_pass);
 
    vc->model.init(vc);
@@ -164,14 +165,16 @@ init_vk(struct vkcube *vc)
                     .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
                     .flags = 0
                  },
+                 NULL,
                  &vc->fence);
 
    vkCreateCommandPool(vc->device,
-                       &(const VkCmdPoolCreateInfo) {
-                          .sType = VK_STRUCTURE_TYPE_CMD_POOL_CREATE_INFO,
+                       &(const VkCommandPoolCreateInfo) {
+                          .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
                           .queueFamilyIndex = 0,
                           .flags = 0
                        },
+                       NULL,
                        &vc->cmd_pool);
 }
 
@@ -184,22 +187,23 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
                         .image = b->image,
                         .viewType = VK_IMAGE_VIEW_TYPE_2D,
                         .format = VK_FORMAT_B8G8R8A8_UNORM,
-                        .channels = {
-                           .r = VK_CHANNEL_SWIZZLE_R,
-                           .g = VK_CHANNEL_SWIZZLE_G,
-                           .b = VK_CHANNEL_SWIZZLE_B,
-                           .a = VK_CHANNEL_SWIZZLE_A,
+                        .components = {
+                           .r = VK_COMPONENT_SWIZZLE_R,
+                           .g = VK_COMPONENT_SWIZZLE_G,
+                           .b = VK_COMPONENT_SWIZZLE_B,
+                           .a = VK_COMPONENT_SWIZZLE_A,
                         },
                         .subresourceRange = {
                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                            .baseMipLevel = 0,
-                           .mipLevels = 0,
+                           .levelCount = 0,
                            .baseArrayLayer = 0,
-                           .arraySize = 1,
+                           .layerCount = 1,
                         },
                      },
+                     NULL,
                      &b->view);
-   
+
    vkCreateFramebuffer(vc->device,
                        &(VkFramebufferCreateInfo) {
                           .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -209,6 +213,7 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
                           .height = vc->height,
                           .layers = 1
                        },
+                       NULL,
                        &b->framebuffer);
 }
 
@@ -294,24 +299,26 @@ init_headless(struct vkcube *vc)
                     .format = VK_FORMAT_B8G8R8A8_UNORM,
                     .extent = { .width = vc->width, .height = vc->height, .depth = 1 },
                     .mipLevels = 1,
-                    .arraySize = 1,
+                    .arrayLayers = 1,
                     .samples = 1,
                     .tiling = VK_IMAGE_TILING_LINEAR,
                     .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                     .flags = 0,
                  },
+                 NULL,
                  &b->image);
 
    VkMemoryRequirements requirements;
    vkGetImageMemoryRequirements(vc->device, b->image, &requirements);
 
-   vkAllocMemory(vc->device,
-                 &(VkMemoryAllocInfo) {
-                    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOC_INFO,
-                    .allocationSize = requirements.size,
-                    .memoryTypeIndex = 0
-                 },
-                 &b->mem);
+   vkAllocateMemory(vc->device,
+                    &(VkMemoryAllocateInfo) {
+                       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                       .allocationSize = requirements.size,
+                       .memoryTypeIndex = 0
+                    },
+                    NULL,
+                    &b->mem);
 
    vkBindImageMemory(vc->device, b->image, b->mem, 0);
 
@@ -448,7 +455,8 @@ init_kms(struct vkcube *vc)
                                   .format = VK_FORMAT_R8G8B8A8_UNORM,
                                   .extent = { vc->width, vc->height, 1 },
                                   .strideInBytes = stride
-                                },
+                               },
+                               NULL,
                                &b->mem,
                                &b->image);
       close(fd);
@@ -601,37 +609,33 @@ init_xcb(struct vkcube *vc)
 
    init_vk(vc);
 
-   VkSurfaceDescriptionWindowKHR vk_window = {
-      .sType = VK_STRUCTURE_TYPE_SURFACE_DESCRIPTION_WINDOW_KHR,
-      .platform = VK_PLATFORM_XCB_KHR,
-      .pPlatformHandle = &(VkPlatformHandleXcbKHR) {
-         .connection = vc->xcb.conn,
-         .root = iter.data->root,
-      },
-      .pPlatformWindow = &vc->xcb.window,
-   };
-
-   VkBool32 supported;
-   vkGetPhysicalDeviceSurfaceSupportKHR(vc->physical_device, 0,
-                                        (VkSurfaceDescriptionKHR *)&vk_window,
-                                        &supported);
-   if (!supported) {
+   if (!vkGetPhysicalDeviceXcbPresentationSupportKHR(vc->physical_device, 0,
+                                                     vc->xcb.conn, 0)) {
       fprintf(stderr, "Vulkan not supported on given X window");
       abort();
    }
 
+   VkSurfaceKHR surface;
+   vkCreateXcbSurfaceKHR(vc->instance, vc->xcb.conn, vc->xcb.window,
+                         NULL, &surface);
+
    vkCreateSwapchainKHR(vc->device,
-                        &(VkSwapchainCreateInfoKHR) {
-                           .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-                           .pSurfaceDescription = (VkSurfaceDescriptionKHR *)&vk_window,
-                           .minImageCount = 2,
-                           .imageFormat = VK_FORMAT_B8G8R8A8_UNORM,
-                           .imageExtent = { vc->width, vc->height },
-                           .imageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                           .preTransform = VK_SURFACE_TRANSFORM_NONE_KHR,
-                           .imageArraySize = 1,
-                           .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
-                        }, &vc->swap_chain);
+      &(VkSwapchainCreateInfoKHR) {
+         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+         .surface = surface,
+         .minImageCount = 2,
+         .imageFormat = VK_FORMAT_B8G8R8A8_UNORM,
+         .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
+         .imageExtent = { vc->width, vc->height },
+         .imageArrayLayers = 1,
+         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+         .queueFamilyIndexCount = 1,
+         .pQueueFamilyIndices = (uint32_t[]) { 0 },
+         .preTransform = VK_SURFACE_TRANSFORM_NONE_BIT_KHR,
+         .compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+         .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+      }, NULL, &vc->swap_chain);
 
    uint32_t image_count = 0;
    vkGetSwapchainImagesKHR(vc->device, vc->swap_chain,
@@ -684,21 +688,19 @@ mainloop_xcb(struct vkcube *vc)
          if (client_message->type == XCB_ATOM_NOTICE) {
             uint32_t index;
             vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
-                                  (VkSemaphore) { 0 }, &index);
+                                  VK_NULL_HANDLE, VK_NULL_HANDLE, &index);
 
             vc->model.render(vc, &vc->buffers[index]);
 
+            VkResult result;
             vkQueuePresentKHR(vc->queue,
-                              &(VkPresentInfoKHR) {
-                                 .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-                                 .swapchainCount = 1,
-                                 .swapchains = (VkSwapchainKHR[]) {
-                                    vc->swap_chain,
-                                 },
-                                 .imageIndices = (uint32_t[]) {
-                                    index,
-                                 },
-                              });
+                &(VkPresentInfoKHR) {
+                   .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                   .swapchainCount = 1,
+                   .pSwapchains = (VkSwapchainKHR[]) { vc->swap_chain, },
+                   .pImageIndices = (uint32_t[]) { index, },
+                   .pResults = &result,
+                });
 
             schedule_xcb_repaint(vc);
          }
@@ -806,31 +808,25 @@ init_wayland(struct vkcube *vc)
 
    init_vk(vc);
 
-   VkSurfaceDescriptionWindowKHR vk_window = {
-      .sType = VK_STRUCTURE_TYPE_SURFACE_DESCRIPTION_WINDOW_KHR,
-      .platform = VK_PLATFORM_WAYLAND_KHR,
-      .pPlatformHandle = vc->wl.display,
-      .pPlatformWindow = vc->wl.surface,
-   };
-
-   VkBool32 supported;
-   vkGetPhysicalDeviceSurfaceSupportKHR(vc->physical_device, 0,
-                                        (VkSurfaceDescriptionKHR *)&vk_window,
-                                        &supported);
-   if (!supported) {
+   if (!vkGetPhysicalDeviceWaylandPresentationSupportKHR(vc->physical_device, 0,
+                                                         vc->wl.display)) {
       fprintf(stderr, "Vulkan not supported on given Wayland surface");
       abort();
    }
 
+   VkSurfaceKHR wsi_surface;
+   vkCreateWaylandSurfaceKHR(vc->instance, vc->wl.display, vc->wl.surface,
+                             NULL, &wsi_surface);
+
    uint32_t num_formats = 0;
-   vkGetSurfaceFormatsKHR(vc->device, (VkSurfaceDescriptionKHR *)&vk_window,
-                          &num_formats, NULL);
+   vkGetPhysicalDeviceSurfaceFormatsKHR(vc->physical_device, wsi_surface,
+                                        &num_formats, NULL);
    assert(num_formats > 0);
 
    VkSurfaceFormatKHR formats[num_formats];
 
-   vkGetSurfaceFormatsKHR(vc->device, (VkSurfaceDescriptionKHR *)&vk_window,
-                          &num_formats, formats);
+   vkGetPhysicalDeviceSurfaceFormatsKHR(vc->physical_device, wsi_surface,
+                                        &num_formats, formats);
 
    VkFormat format = VK_FORMAT_UNDEFINED;
    for (int i = 0; i < num_formats; i++) {
@@ -842,8 +838,8 @@ init_wayland(struct vkcube *vc)
          break;
       case VK_FORMAT_R8G8B8_UNORM:
       case VK_FORMAT_B8G8R8_UNORM:
-      case VK_FORMAT_R5G6B5_UNORM:
-      case VK_FORMAT_B5G6R5_UNORM:
+      case VK_FORMAT_R5G6B5_UNORM_PACK16:
+      case VK_FORMAT_B5G6R5_UNORM_PACK16:
          /* We would like to support these but they don't seem to work. */
       default:
          continue;
@@ -853,17 +849,22 @@ init_wayland(struct vkcube *vc)
    assert(format != VK_FORMAT_UNDEFINED);
 
    vkCreateSwapchainKHR(vc->device,
-                        &(VkSwapchainCreateInfoKHR) {
-                           .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-                           .pSurfaceDescription = (VkSurfaceDescriptionKHR *)&vk_window,
-                           .minImageCount = 2,
-                           .imageFormat = format,
-                           .imageExtent = { vc->width, vc->height },
-                           .imageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                           .preTransform = VK_SURFACE_TRANSFORM_NONE_KHR,
-                           .imageArraySize = 1,
-                           .presentMode = VK_PRESENT_MODE_FIFO_KHR,
-                        }, &vc->swap_chain);
+      &(VkSwapchainCreateInfoKHR) {
+         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+         .surface = wsi_surface,
+         .minImageCount = 2,
+         .imageFormat = format,
+         .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
+         .imageExtent = { vc->width, vc->height },
+         .imageArrayLayers = 1,
+         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+         .queueFamilyIndexCount = 1,
+         .pQueueFamilyIndices = (uint32_t[]) { 0 },
+         .preTransform = VK_SURFACE_TRANSFORM_NONE_BIT_KHR,
+         .compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+         .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+      }, NULL, &vc->swap_chain);
 
    uint32_t image_count;
    vkGetSwapchainImagesKHR(vc->device, vc->swap_chain,
@@ -887,23 +888,20 @@ mainloop_wayland(struct vkcube *vc)
    while (1) {
       uint32_t index;
       result = vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
-                                     (VkSemaphore) { 0 }, &index);
+                                     VK_NULL_HANDLE, VK_NULL_HANDLE, &index);
       if (result != VK_SUCCESS)
          return;
 
       vc->model.render(vc, &vc->buffers[index]);
 
       vkQueuePresentKHR(vc->queue,
-                        &(VkPresentInfoKHR) {
-                           .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-                           .swapchainCount = 1,
-                           .swapchains = (VkSwapchainKHR[]) {
-                              vc->swap_chain,
-                           },
-                           .imageIndices = (uint32_t[]) {
-                              index,
-                           },
-                        });
+         &(VkPresentInfoKHR) {
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .swapchainCount = 1,
+            .pSwapchains = (VkSwapchainKHR[]) { vc->swap_chain, },
+            .pImageIndices = (uint32_t[]) { index, },
+            .pResults = &result,
+         });
       if (result != VK_SUCCESS)
          return;
    }

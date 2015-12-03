@@ -12,11 +12,11 @@
 #include <wayland-client.h>
 #include <xdg-shell-client-protocol.h>
 
+#define VK_USE_PLATFORM_XCB_KHR
+#define VK_USE_PLATFORM_WAYLAND_KHR
 #define VK_PROTOTYPES
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_intel.h>
-#include <vulkan/vk_ext_khr_swapchain.h>
-#include <vulkan/vk_ext_khr_device_swapchain.h>
 
 #include <gbm.h>
 
@@ -79,7 +79,7 @@ struct vkcube {
    VkBuffer buffer;
    VkDescriptorSet descriptor_set;
    VkFence fence;
-   VkCmdPool cmd_pool;
+   VkCommandPool cmd_pool;
 
    void *map;
    uint32_t vertex_offset, colors_offset, normals_offset;

@@ -46,65 +46,67 @@ init_cube(struct vkcube *vc)
    vkCreateDescriptorSetLayout(vc->device,
                                &(VkDescriptorSetLayoutCreateInfo) {
                                   .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-                                  .count = 1,
+                                  .bindingCount = 1,
                                   .pBinding = (VkDescriptorSetLayoutBinding[]) {
                                      {
                                         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                                        .arraySize = 1,
+                                        .descriptorCount = 1,
                                         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                                         .pImmutableSamplers = NULL
                                      }
                                   }
                                },
+                               NULL,
                                &set_layout);
 
    vkCreatePipelineLayout(vc->device,
                           &(VkPipelineLayoutCreateInfo) {
                              .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                             .descriptorSetCount = 1,
+                             .setLayoutCount = 1,
                              .pSetLayouts = &set_layout,
                           },
+                          NULL,
                           &vc->pipeline_layout);
 
    VkPipelineVertexInputStateCreateInfo vi_create_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-      .bindingCount = 3,
+      .vertexBindingDescriptionCount = 3,
       .pVertexBindingDescriptions = (VkVertexInputBindingDescription[]) {
          {
             .binding = 0,
-            .strideInBytes = 3 * sizeof(float),
-            .stepRate = VK_VERTEX_INPUT_STEP_RATE_VERTEX
+            .stride = 3 * sizeof(float),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
          },
          {
             .binding = 1,
-            .strideInBytes = 3 * sizeof(float),
-            .stepRate = VK_VERTEX_INPUT_STEP_RATE_VERTEX
+            .stride = 3 * sizeof(float),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
          },
          {
             .binding = 2,
-            .strideInBytes = 3 * sizeof(float),
-            .stepRate = VK_VERTEX_INPUT_STEP_RATE_VERTEX
+            .stride = 3 * sizeof(float),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
          }
       },
-      .attributeCount = 3,
+      .vertexAttributeDescriptionCount = 3,
       .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]) {
          {
             .location = 0,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offsetInBytes = 0
+            .offset = 0
          },
          {
             .location = 1,
             .binding = 1,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offsetInBytes = 0
+            .offset = 0
          },
          {
             .location = 2,
             .binding = 2,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offsetInBytes = 0
+            .offset = 0
          }
       }
    };
@@ -114,38 +116,20 @@ init_cube(struct vkcube *vc)
                         &(VkShaderModuleCreateInfo) {
                            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
                            .codeSize = sizeof(vs_spirv_source),
-                           .pCode = vs_spirv_source,
+                           .pCode = (uint32_t *)vs_spirv_source,
                         },
+                        NULL,
                         &vs_module);
-
-   VkShader vs;
-   vkCreateShader(vc->device,
-                  &(VkShaderCreateInfo) {
-                     .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO,
-                     .module = vs_module,
-                     .pName = "main",
-                     .stage = VK_SHADER_STAGE_VERTEX,
-                  },
-                  &vs);
 
    VkShaderModule fs_module;
    vkCreateShaderModule(vc->device,
                         &(VkShaderModuleCreateInfo) {
                            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
                            .codeSize = sizeof(fs_spirv_source),
-                           .pCode = fs_spirv_source,
+                           .pCode = (uint32_t *)fs_spirv_source,
                         },
+                        NULL,
                         &fs_module);
-
-   VkShader fs;
-   vkCreateShader(vc->device,
-                  &(VkShaderCreateInfo) {
-                     .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO,
-                     .module = fs_module,
-                     .pName = "main",
-                     .stage = VK_SHADER_STAGE_FRAGMENT,
-                  },
-                  &fs);
 
    vkCreateGraphicsPipelines(vc->device,
       (VkPipelineCache) { VK_NULL_HANDLE },
@@ -156,13 +140,15 @@ init_cube(struct vkcube *vc)
          .pStages = (VkPipelineShaderStageCreateInfo[]) {
              {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = VK_SHADER_STAGE_VERTEX,
-                .shader = vs
+                .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                .module = vs_module,
+                .pName = "main",
              },
              {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = VK_SHADER_STAGE_FRAGMENT,
-                .shader = fs,
+                .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .module = fs_module,
+                .pName = "main",
              },
          },
          .pVertexInputState = &vi_create_info,
@@ -174,13 +160,12 @@ init_cube(struct vkcube *vc)
 
          .pViewportState = &(VkPipelineViewportStateCreateInfo) {},
 
-         .pRasterState = &(VkPipelineRasterStateCreateInfo) {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTER_STATE_CREATE_INFO,
-            .depthClipEnable = true,
+         .pRasterizationState = &(VkPipelineRasterizationStateCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .rasterizerDiscardEnable = false,
-            .fillMode = VK_FILL_MODE_SOLID,
-            .cullMode = VK_CULL_MODE_BACK,
-            .frontFace = VK_FRONT_FACE_CW
+            .polygonMode = VK_POLYGON_MODE_FILL,
+            .cullMode = VK_CULL_MODE_BACK_BIT,
+            .frontFace = VK_FRONT_FACE_CLOCKWISE
          },
 
          .pMultisampleState = &(VkPipelineMultisampleStateCreateInfo) {},
@@ -190,8 +175,10 @@ init_cube(struct vkcube *vc)
             .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
             .attachmentCount = 1,
             .pAttachments = (VkPipelineColorBlendAttachmentState []) {
-               { .channelWriteMask = VK_CHANNEL_A_BIT |
-                 VK_CHANNEL_R_BIT | VK_CHANNEL_G_BIT | VK_CHANNEL_B_BIT },
+               { .colorWriteMask = VK_COLOR_COMPONENT_A_BIT |
+                                   VK_COLOR_COMPONENT_R_BIT |
+                                   VK_COLOR_COMPONENT_G_BIT |
+                                   VK_COLOR_COMPONENT_B_BIT },
             }
          },
 
@@ -202,6 +189,7 @@ init_cube(struct vkcube *vc)
          .basePipelineHandle = (VkPipeline) { 0 },
          .basePipelineIndex = 0
       },
+      NULL,
       &vc->pipeline);
 
    static const float vVertices[] = {
@@ -308,13 +296,14 @@ init_cube(struct vkcube *vc)
    vc->normals_offset = vc->colors_offset + sizeof(vColors);
    uint32_t mem_size = vc->normals_offset + sizeof(vNormals);
 
-   vkAllocMemory(vc->device,
-                 &(VkMemoryAllocInfo) {
-                    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOC_INFO,
-                    .allocationSize = mem_size,
-                    .memoryTypeIndex = 0,
-                 },
-                 &vc->mem);
+   vkAllocateMemory(vc->device,
+                    &(VkMemoryAllocateInfo) {
+                       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                       .allocationSize = mem_size,
+                       .memoryTypeIndex = 0,
+                    },
+                    NULL,
+                    &vc->mem);
 
    vkMapMemory(vc->device, vc->mem, 0, mem_size, 0, &vc->map);
    memcpy(vc->map + vc->vertex_offset, vVertices, sizeof(vVertices));
@@ -328,27 +317,32 @@ init_cube(struct vkcube *vc)
                      .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                      .flags = 0
                   },
+                  NULL,
                   &vc->buffer);
 
    vkBindBufferMemory(vc->device, vc->buffer, vc->mem, 0);
 
-   vkAllocDescriptorSets(vc->device, (VkDescriptorPool) { 0 },
-                         VK_DESCRIPTOR_SET_USAGE_STATIC,
-                         1, &set_layout, &vc->descriptor_set);
+   vkAllocateDescriptorSets(vc->device,
+      &(VkDescriptorSetAllocateInfo) {
+         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+         .descriptorPool = VK_NULL_HANDLE,
+         .setLayoutCount = 1,
+         .pSetLayouts = &set_layout,
+      }, &vc->descriptor_set);
 
    vkUpdateDescriptorSets(vc->device, 1,
                           (VkWriteDescriptorSet []) {
                              {
                                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                .destSet = vc->descriptor_set,
-                                .destBinding = 0,
-                                .destArrayElement = 0,
-                                .count = 1,
+                                .dstSet = vc->descriptor_set,
+                                .dstBinding = 0,
+                                .dstArrayElement = 0,
+                                .descriptorCount = 1,
                                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                                .pDescriptors = (VkDescriptorInfo []) {
-                                   {
-                                      .bufferInfo = { vc->buffer, 0, sizeof(struct ubo) }
-                                   }
+                                .pBufferInfo = &(VkDescriptorBufferInfo) {
+                                   .buffer = vc->buffer,
+                                   .offset = 0,
+                                   .range = sizeof(struct ubo),
                                 }
                              }
                           },
@@ -386,18 +380,19 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
 
    memcpy(vc->map, &ubo, sizeof(ubo));
 
-   VkCmdBuffer cmd_buffer;
-   vkCreateCommandBuffer(vc->device,
-                         &(VkCmdBufferCreateInfo) {
-                            .sType = VK_STRUCTURE_TYPE_CMD_BUFFER_CREATE_INFO,
-                            .cmdPool = vc->cmd_pool,
-                            .level = 0,
-                         },
-                         &cmd_buffer);
+   VkCommandBuffer cmd_buffer;
+   vkAllocateCommandBuffers(vc->device,
+      &(VkCommandBufferAllocateInfo) {
+         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+         .commandPool = vc->cmd_pool,
+         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+         .bufferCount = 1,
+      },
+      &cmd_buffer);
 
    vkBeginCommandBuffer(cmd_buffer,
-                        &(VkCmdBufferBeginInfo) {
-                           .sType = VK_STRUCTURE_TYPE_CMD_BUFFER_BEGIN_INFO,
+                        &(VkCommandBufferBeginInfo) {
+                           .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                            .flags = 0
                         });
 
@@ -412,7 +407,7 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
                               { .color = { .float32 = { 0.2f, 0.2f, 0.2f, 1.0f } } }
                            }
                         },
-                        VK_RENDER_PASS_CONTENTS_INLINE);
+                        VK_SUBPASS_CONTENTS_INLINE);
 
    vkCmdBindVertexBuffers(cmd_buffer, 0, 3,
                           (VkBuffer[]) {
@@ -445,7 +440,12 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
 
    vkEndCommandBuffer(cmd_buffer);
 
-   vkQueueSubmit(vc->queue, 1, &cmd_buffer, vc->fence);
+   vkQueueSubmit(vc->queue, 1,
+      &(VkSubmitInfo) {
+         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+         .commandBufferCount = 1,
+         &cmd_buffer,
+      }, vc->fence);
 
    vkWaitForFences(vc->device, 1, (VkFence[]) { vc->fence }, true, INT64_MAX);
 
