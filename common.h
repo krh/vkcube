@@ -4,7 +4,7 @@
 
 #include <xf86drm.h>
 #include <xf86drmMode.h>
-#include <drm/drm_fourcc.h>
+#include <drm_fourcc.h>
 #include <libpng16/png.h>
 
 #include <xcb/xcb.h>
