@@ -47,7 +47,7 @@ init_cube(struct vkcube *vc)
                                &(VkDescriptorSetLayoutCreateInfo) {
                                   .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                                   .bindingCount = 1,
-                                  .pBinding = (VkDescriptorSetLayoutBinding[]) {
+                                  .pBindings = (VkDescriptorSetLayoutBinding[]) {
                                      {
                                         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                                         .descriptorCount = 1,
@@ -158,7 +158,17 @@ init_cube(struct vkcube *vc)
             .primitiveRestartEnable = false,
          },
 
-         .pViewportState = &(VkPipelineViewportStateCreateInfo) {},
+         .pViewportState = &(VkPipelineViewportStateCreateInfo) {
+            .viewportCount = 1,
+            .pViewports = &(VkViewport) {
+                .x = 0,
+                .y = 0,
+                .width = vc->width,
+                .height = vc->height,
+                .minDepth = 0,
+                .maxDepth = 1,
+            },
+         },
 
          .pRasterizationState = &(VkPipelineRasterizationStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -168,7 +178,9 @@ init_cube(struct vkcube *vc)
             .frontFace = VK_FRONT_FACE_CLOCKWISE
          },
 
-         .pMultisampleState = &(VkPipelineMultisampleStateCreateInfo) {},
+         .pMultisampleState = &(VkPipelineMultisampleStateCreateInfo) {
+            .rasterizationSamples = 1,
+         },
          .pDepthStencilState = &(VkPipelineDepthStencilStateCreateInfo) {},
 
          .pColorBlendState = &(VkPipelineColorBlendStateCreateInfo) {
@@ -326,7 +338,7 @@ init_cube(struct vkcube *vc)
       &(VkDescriptorSetAllocateInfo) {
          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
          .descriptorPool = VK_NULL_HANDLE,
-         .setLayoutCount = 1,
+         .descriptorSetCount = 1,
          .pSetLayouts = &set_layout,
       }, &vc->descriptor_set);
 
@@ -386,7 +398,7 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
          .commandPool = vc->cmd_pool,
          .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-         .bufferCount = 1,
+         .commandBufferCount = 1,
       },
       &cmd_buffer);
 

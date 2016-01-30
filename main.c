@@ -80,7 +80,7 @@ init_vk(struct vkcube *vc)
          .pApplicationInfo = &(VkApplicationInfo) {
             .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
             .pApplicationName = "vkcube",
-            .apiVersion = VK_MAKE_VERSION(0, 210, 1),
+            .apiVersion = VK_MAKE_VERSION(1, 0, 2),
          }
       },
       NULL,
@@ -137,20 +137,13 @@ init_vk(struct vkcube *vc)
                },
                .pResolveAttachments = (VkAttachmentReference []) {
                   {
-                     .attachment = 0,
+                     .attachment = VK_ATTACHMENT_UNUSED,
                      .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
                   }
                },
-               .pDepthStencilAttachment = &(VkAttachmentReference) {
-                  .attachment = VK_ATTACHMENT_UNUSED
-               },
+               .pDepthStencilAttachment = NULL,
                .preserveAttachmentCount = 1,
-               .pPreserveAttachments = (VkAttachmentReference []) {
-                  {
-                     .attachment = 0,
-                     .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-                  }
-               },
+               .pPreserveAttachments = (uint32_t []) { 0 },
             }
          },
          .dependencyCount = 0
@@ -610,14 +603,19 @@ init_xcb(struct vkcube *vc)
    init_vk(vc);
 
    if (!vkGetPhysicalDeviceXcbPresentationSupportKHR(vc->physical_device, 0,
-                                                     vc->xcb.conn, 0)) {
+                                                     vc->xcb.conn,
+                                                     iter.data->root_visual)) {
       fprintf(stderr, "Vulkan not supported on given X window");
       abort();
    }
 
-   VkSurfaceKHR surface;
-   vkCreateXcbSurfaceKHR(vc->instance, vc->xcb.conn, vc->xcb.window,
-                         NULL, &surface);
+   VkSurfaceKHR surface = 0;
+   vkCreateXcbSurfaceKHR(vc->instance,
+      &(VkXcbSurfaceCreateInfoKHR) {
+         .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
+         .connection = vc->xcb.conn,
+         .window = vc->xcb.window,
+      }, NULL, &surface);
 
    vkCreateSwapchainKHR(vc->device,
       &(VkSwapchainCreateInfoKHR) {
@@ -632,7 +630,7 @@ init_xcb(struct vkcube *vc)
          .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
          .queueFamilyIndexCount = 1,
          .pQueueFamilyIndices = (uint32_t[]) { 0 },
-         .preTransform = VK_SURFACE_TRANSFORM_NONE_BIT_KHR,
+         .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
          .compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
          .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
       }, NULL, &vc->swap_chain);
@@ -815,8 +813,13 @@ init_wayland(struct vkcube *vc)
    }
 
    VkSurfaceKHR wsi_surface;
-   vkCreateWaylandSurfaceKHR(vc->instance, vc->wl.display, vc->wl.surface,
-                             NULL, &wsi_surface);
+
+   vkCreateWaylandSurfaceKHR(vc->instance,
+      &(VkWaylandSurfaceCreateInfoKHR) {
+         .sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
+         .display = vc->wl.display,
+         .surface = vc->wl.surface,
+      }, NULL, &wsi_surface);
 
    uint32_t num_formats = 0;
    vkGetPhysicalDeviceSurfaceFormatsKHR(vc->physical_device, wsi_surface,
@@ -861,7 +864,7 @@ init_wayland(struct vkcube *vc)
          .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
          .queueFamilyIndexCount = 1,
          .pQueueFamilyIndices = (uint32_t[]) { 0 },
-         .preTransform = VK_SURFACE_TRANSFORM_NONE_BIT_KHR,
+         .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
          .compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
          .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
       }, NULL, &vc->swap_chain);
