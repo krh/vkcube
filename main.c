@@ -115,7 +115,7 @@ init_vk(struct vkcube *vc)
          .attachmentCount = 1,
          .pAttachments = (VkAttachmentDescription[]) {
             {
-               .format = VK_FORMAT_R8G8B8A8_UNORM,
+               .format = VK_FORMAT_R8G8B8A8_SRGB,
                .samples = 1,
                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -179,7 +179,7 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
                         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                         .image = b->image,
                         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                        .format = VK_FORMAT_B8G8R8A8_UNORM,
+                        .format = VK_FORMAT_B8G8R8A8_SRGB,
                         .components = {
                            .r = VK_COMPONENT_SWIZZLE_R,
                            .g = VK_COMPONENT_SWIZZLE_G,
@@ -289,7 +289,7 @@ init_headless(struct vkcube *vc)
                  &(VkImageCreateInfo) {
                     .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
                     .imageType = VK_IMAGE_TYPE_2D,
-                    .format = VK_FORMAT_B8G8R8A8_UNORM,
+                    .format = VK_FORMAT_B8G8R8A8_SRGB,
                     .extent = { .width = vc->width, .height = vc->height, .depth = 1 },
                     .mipLevels = 1,
                     .arrayLayers = 1,
@@ -445,7 +445,7 @@ init_kms(struct vkcube *vc)
                                &(VkDmaBufImageCreateInfo) {
                                   .sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
                                   .fd = fd,
-                                  .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                  .format = VK_FORMAT_R8G8B8A8_SRGB,
                                   .extent = { vc->width, vc->height, 1 },
                                   .strideInBytes = stride
                                },
@@ -622,7 +622,7 @@ init_xcb(struct vkcube *vc)
          .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
          .surface = surface,
          .minImageCount = 2,
-         .imageFormat = VK_FORMAT_B8G8R8A8_UNORM,
+         .imageFormat = VK_FORMAT_B8G8R8A8_SRGB,
          .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
          .imageExtent = { vc->width, vc->height },
          .imageArrayLayers = 1,
@@ -834,13 +834,13 @@ init_wayland(struct vkcube *vc)
    VkFormat format = VK_FORMAT_UNDEFINED;
    for (int i = 0; i < num_formats; i++) {
       switch (formats[i].format) {
-      case VK_FORMAT_R8G8B8A8_UNORM:
-      case VK_FORMAT_B8G8R8A8_UNORM:
+      case VK_FORMAT_R8G8B8A8_SRGB:
+      case VK_FORMAT_B8G8R8A8_SRGB:
          /* These formats are all fine */
          format = formats[i].format;
          break;
-      case VK_FORMAT_R8G8B8_UNORM:
-      case VK_FORMAT_B8G8R8_UNORM:
+      case VK_FORMAT_R8G8B8_SRGB:
+      case VK_FORMAT_B8G8R8_SRGB:
       case VK_FORMAT_R5G6B5_UNORM_PACK16:
       case VK_FORMAT_B5G6R5_UNORM_PACK16:
          /* We would like to support these but they don't seem to work. */
