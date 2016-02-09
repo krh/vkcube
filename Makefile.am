@@ -18,7 +18,8 @@ BUILT_SOURCES = \
 	vkcube.frag.spv.h
 
 %.spv.h: %
-	$(GLSLC) -o - $< | xxd -i > $@
+	@if test -z "$(GLSLC)"; then echo "Missing glslc. See https://github.com/google/shaderc"; exit 1; fi
+	$(AM_GEN) $(GLSLC) -o - $< | xxd -i > $@.tmp && mv $@.tmp $@
 
 vkcube_SOURCES =				\
 	$(BUILT_SOURCES)			\

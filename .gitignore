@@ -1,7 +1,6 @@
 Makefile
 Makefile.in
 *~
-*.spv.h
 .deps
 aclocal.m4
 autom4te.cache
