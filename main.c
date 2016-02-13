@@ -432,6 +432,9 @@ init_kms(struct vkcube *vc)
 
    init_vk(vc);
 
+   PFN_vkCreateDmaBufImageINTEL create_dma_buf_image =
+      (PFN_vkCreateDmaBufImageINTEL)vkGetDeviceProcAddr(vc->device, "vkCreateDmaBufImageINTEL");
+
    for (uint32_t i = 0; i < 2; i++) {
       struct vkcube_buffer *b = &vc->buffers[i];
       int fd, stride, ret;
@@ -441,17 +444,17 @@ init_kms(struct vkcube *vc)
 
       fd = gbm_bo_get_fd(b->gbm_bo);
       stride = gbm_bo_get_stride(b->gbm_bo);
-      vkCreateDmaBufImageINTEL(vc->device,
-                               &(VkDmaBufImageCreateInfo) {
-                                  .sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
-                                  .fd = fd,
-                                  .format = VK_FORMAT_R8G8B8A8_SRGB,
-                                  .extent = { vc->width, vc->height, 1 },
-                                  .strideInBytes = stride
-                               },
-                               NULL,
-                               &b->mem,
-                               &b->image);
+      create_dma_buf_image(vc->device,
+                           &(VkDmaBufImageCreateInfo) {
+                              .sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
+                              .fd = fd,
+                              .format = VK_FORMAT_R8G8B8A8_SRGB,
+                              .extent = { vc->width, vc->height, 1 },
+                              .strideInBytes = stride
+                           },
+                           NULL,
+                           &b->mem,
+                           &b->image);
       close(fd);
 
       b->stride = gbm_bo_get_stride(b->gbm_bo);
