@@ -811,16 +811,23 @@ init_wayland(struct vkcube *vc)
 
    init_vk(vc, VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 
-   if (!vkGetPhysicalDeviceWaylandPresentationSupportKHR(vc->physical_device, 0,
-                                                         vc->wl.display)) {
+   PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR get_wayland_presentation_support =
+      (PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR)
+      vkGetDeviceProcAddr(vc->device, "vkGetPhysicalDeviceWaylandPresentationSupportKHR");
+   PFN_vkCreateWaylandSurfaceKHR create_wayland_surface =
+      (PFN_vkCreateWaylandSurfaceKHR)
+      vkGetDeviceProcAddr(vc->device, "vkCreateDmaBufImageINTEL");
+
+   if (!get_wayland_presentation_support(vc->physical_device, 0,
+                                         vc->wl.display)) {
       fprintf(stderr, "Vulkan not supported on given Wayland surface");
       abort();
    }
 
    VkSurfaceKHR wsi_surface;
 
-   vkCreateWaylandSurfaceKHR(vc->instance,
-      &(VkWaylandSurfaceCreateInfoKHR) {
+   create_wayland_surface(vc->instance,
+                          &(VkWaylandSurfaceCreateInfoKHR) {
          .sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
          .display = vc->wl.display,
          .surface = vc->wl.surface,
