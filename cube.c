@@ -334,10 +334,27 @@ init_cube(struct vkcube *vc)
 
    vkBindBufferMemory(vc->device, vc->buffer, vc->mem, 0);
 
+   VkDescriptorPool desc_pool;
+   const VkDescriptorPoolCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .pNext = NULL,
+      .flags = 0,
+      .maxSets = 1,
+      .poolSizeCount = 1,
+      .pPoolSizes = (VkDescriptorPoolSize[]) {
+         {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1
+         },
+      }
+   };
+
+   vkCreateDescriptorPool(vc->device, &create_info, NULL, &desc_pool);
+
    vkAllocateDescriptorSets(vc->device,
       &(VkDescriptorSetAllocateInfo) {
          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-         .descriptorPool = VK_NULL_HANDLE,
+         .descriptorPool = desc_pool,
          .descriptorSetCount = 1,
          .pSetLayouts = &set_layout,
       }, &vc->descriptor_set);
