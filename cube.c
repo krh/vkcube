@@ -441,6 +441,16 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
                            0, 1,
                            &vc->descriptor_set, 0, NULL);
 
+   const VkViewport viewport = {
+      .x = 0,
+      .y = 0,
+      .width = vc->width,
+      .height = vc->height,
+      .minDepth = 0,
+      .maxDepth = 1,
+   };
+   vkCmdSetViewport(cmd_buffer, 0, 1, &viewport);
+
    vkCmdDraw(cmd_buffer, 4, 1, 0, 0);
    vkCmdDraw(cmd_buffer, 4, 1, 4, 0);
    vkCmdDraw(cmd_buffer, 4, 1, 8, 0);

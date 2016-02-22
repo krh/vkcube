@@ -614,18 +614,23 @@ init_xcb(struct vkcube *vc)
       abort();
    }
 
-   VkSurfaceKHR surface = 0;
    vkCreateXcbSurfaceKHR(vc->instance,
       &(VkXcbSurfaceCreateInfoKHR) {
          .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
          .connection = vc->xcb.conn,
          .window = vc->xcb.window,
-      }, NULL, &surface);
+      }, NULL, &vc->surface);
 
+   vc->image_count = 0;
+}
+
+static void
+alloc_buffers_xcb(struct vkcube *vc)
+{
    vkCreateSwapchainKHR(vc->device,
       &(VkSwapchainCreateInfoKHR) {
          .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-         .surface = surface,
+         .surface = vc->surface,
          .minImageCount = 2,
          .imageFormat = VK_FORMAT_B8G8R8A8_SRGB,
          .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
@@ -640,15 +645,14 @@ init_xcb(struct vkcube *vc)
          .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
       }, NULL, &vc->swap_chain);
 
-   uint32_t image_count = 0;
    vkGetSwapchainImagesKHR(vc->device, vc->swap_chain,
-                           &image_count, NULL);
-   assert(image_count > 0);
-   VkImage swap_chain_images[image_count];
+                           &vc->image_count, NULL);
+   assert(vc->image_count > 0);
+   VkImage swap_chain_images[vc->image_count];
    vkGetSwapchainImagesKHR(vc->device, vc->swap_chain,
-                           &image_count, swap_chain_images);
+                           &vc->image_count, swap_chain_images);
 
-   for (uint32_t i = 0; i < image_count; i++) {
+   for (uint32_t i = 0; i < vc->image_count; i++) {
       vc->buffers[i].image = swap_chain_images[i];
       init_buffer(vc, &vc->buffers[i]);
    }
@@ -674,6 +678,7 @@ mainloop_xcb(struct vkcube *vc)
    xcb_generic_event_t *event;
    xcb_key_press_event_t *key_press;
    xcb_client_message_event_t *client_message;
+   xcb_configure_notify_event_t *configure;
 
    while (1) {
       event = xcb_wait_for_event(vc->xcb.conn);
@@ -687,6 +692,9 @@ mainloop_xcb(struct vkcube *vc)
              client_message->data.data32[0] == vc->xcb.atom_wm_delete_window) {
             exit(0);
          }
+
+         if (vc->image_count == 0)
+            alloc_buffers_xcb(vc);
 
          if (client_message->type == XCB_ATOM_NOTICE) {
             uint32_t index;
@@ -707,6 +715,17 @@ mainloop_xcb(struct vkcube *vc)
 
             schedule_xcb_repaint(vc);
          }
+         break;
+
+      case XCB_CONFIGURE_NOTIFY:
+         if (vc->image_count > 0) {
+            vkDestroySwapchainKHR(vc->device, vc->swap_chain, NULL);
+            vc->image_count = 0;
+         }
+
+         configure = (xcb_configure_notify_event_t *) event;
+         vc->width = configure->width;
+         vc->height = configure->height;
          break;
 
       case XCB_EXPOSE:
