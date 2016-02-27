@@ -835,7 +835,7 @@ init_wayland(struct vkcube *vc)
       vkGetDeviceProcAddr(vc->device, "vkGetPhysicalDeviceWaylandPresentationSupportKHR");
    PFN_vkCreateWaylandSurfaceKHR create_wayland_surface =
       (PFN_vkCreateWaylandSurfaceKHR)
-      vkGetDeviceProcAddr(vc->device, "vkCreateDmaBufImageINTEL");
+      vkGetDeviceProcAddr(vc->device, "vkCreateWaylandSurfaceKHR");
 
    if (!get_wayland_presentation_support(vc->physical_device, 0,
                                          vc->wl.display)) {

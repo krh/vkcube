@@ -19,6 +19,7 @@ AC_SUBST([MINIGBM_CPPFLAGS])
 AC_SUBST([MINIGBM_LDFLAGS])
 
 PKG_CHECK_MODULES([LIBDRM], [libdrm])
+PKG_CHECK_MODULES([LIBPNG], [libpng])
 PKG_CHECK_MODULES([WAYLAND], [wayland-client])
 
 AC_ARG_VAR([GLSLC], [path to glslc executable])
