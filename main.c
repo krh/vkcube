@@ -700,14 +700,17 @@ mainloop_xcb(struct vkcube *vc)
             break;
 
          case XCB_CONFIGURE_NOTIFY:
-            if (vc->image_count > 0) {
-               vkDestroySwapchainKHR(vc->device, vc->swap_chain, NULL);
-               vc->image_count = 0;
-            }
-
             configure = (xcb_configure_notify_event_t *) event;
-            vc->width = configure->width;
-            vc->height = configure->height;
+            if (vc->width != configure->width ||
+                vc->height != configure->height) {
+               if (vc->image_count > 0) {
+                  vkDestroySwapchainKHR(vc->device, vc->swap_chain, NULL);
+                  vc->image_count = 0;
+               }
+
+               vc->width = configure->width;
+               vc->height = configure->height;
+            }
             break;
 
          case XCB_EXPOSE:
