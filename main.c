@@ -681,67 +681,75 @@ mainloop_xcb(struct vkcube *vc)
    xcb_configure_notify_event_t *configure;
 
    while (1) {
+      bool repaint = false;
       event = xcb_wait_for_event(vc->xcb.conn);
-      switch (event->response_type & 0x7f) {
-      case XCB_CLIENT_MESSAGE:
-         client_message = (xcb_client_message_event_t *) event;
-         if (client_message->window != vc->xcb.window)
+      while (event) {
+         switch (event->response_type & 0x7f) {
+         case XCB_CLIENT_MESSAGE:
+            client_message = (xcb_client_message_event_t *) event;
+            if (client_message->window != vc->xcb.window)
+               break;
+
+            if (client_message->type == vc->xcb.atom_wm_protocols &&
+                client_message->data.data32[0] == vc->xcb.atom_wm_delete_window) {
+               exit(0);
+            }
+
+            if (client_message->type == XCB_ATOM_NOTICE)
+               repaint = true;
             break;
 
-         if (client_message->type == vc->xcb.atom_wm_protocols &&
-             client_message->data.data32[0] == vc->xcb.atom_wm_delete_window) {
-            exit(0);
-         }
+         case XCB_CONFIGURE_NOTIFY:
+            if (vc->image_count > 0) {
+               vkDestroySwapchainKHR(vc->device, vc->swap_chain, NULL);
+               vc->image_count = 0;
+            }
 
+            configure = (xcb_configure_notify_event_t *) event;
+            vc->width = configure->width;
+            vc->height = configure->height;
+            break;
+
+         case XCB_EXPOSE:
+            schedule_xcb_repaint(vc);
+            break;
+
+         case XCB_KEY_PRESS:
+            key_press = (xcb_key_press_event_t *) event;
+
+            if (key_press->detail == 9)
+               exit(0);
+
+            break;
+         }
+         free(event);
+
+         event = xcb_poll_for_event(vc->xcb.conn);
+      }
+
+      if (repaint) {
          if (vc->image_count == 0)
             alloc_buffers_xcb(vc);
 
-         if (client_message->type == XCB_ATOM_NOTICE) {
-            uint32_t index;
-            vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
-                                  VK_NULL_HANDLE, VK_NULL_HANDLE, &index);
+         uint32_t index;
+         vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
+                               VK_NULL_HANDLE, VK_NULL_HANDLE, &index);
 
-            vc->model.render(vc, &vc->buffers[index]);
+         vc->model.render(vc, &vc->buffers[index]);
 
-            VkResult result;
-            vkQueuePresentKHR(vc->queue,
-                &(VkPresentInfoKHR) {
-                   .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-                   .swapchainCount = 1,
-                   .pSwapchains = (VkSwapchainKHR[]) { vc->swap_chain, },
-                   .pImageIndices = (uint32_t[]) { index, },
-                   .pResults = &result,
-                });
+         VkResult result;
+         vkQueuePresentKHR(vc->queue,
+             &(VkPresentInfoKHR) {
+                .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                .swapchainCount = 1,
+                .pSwapchains = (VkSwapchainKHR[]) { vc->swap_chain, },
+                .pImageIndices = (uint32_t[]) { index, },
+                .pResults = &result,
+             });
 
-            schedule_xcb_repaint(vc);
-         }
-         break;
-
-      case XCB_CONFIGURE_NOTIFY:
-         if (vc->image_count > 0) {
-            vkDestroySwapchainKHR(vc->device, vc->swap_chain, NULL);
-            vc->image_count = 0;
-         }
-
-         configure = (xcb_configure_notify_event_t *) event;
-         vc->width = configure->width;
-         vc->height = configure->height;
-         break;
-
-      case XCB_EXPOSE:
          schedule_xcb_repaint(vc);
-         break;
-
-      case XCB_KEY_PRESS:
-         key_press = (xcb_key_press_event_t *) event;
-
-         if (key_press->detail == 9)
-            exit(0);
-
-         break;
       }
 
-      free(event);
       xcb_flush(vc->xcb.conn);
    }
 }
