@@ -147,10 +147,10 @@ esFrustum(ESMatrix *result, float left, float right, float bottom, float top, fl
 
     frust.m[2][0] = (right + left) / deltaX;
     frust.m[2][1] = (top + bottom) / deltaY;
-    frust.m[2][2] = -(nearZ + farZ) / deltaZ;
+    frust.m[2][2] = -farZ / deltaZ;
     frust.m[2][3] = -1.0f;
 
-    frust.m[3][2] = -2.0f * nearZ * farZ / deltaZ;
+    frust.m[3][2] = -(nearZ * farZ) / deltaZ;
     frust.m[3][0] = frust.m[3][1] = frust.m[3][3] = 0.0f;
 
     esMatrixMultiply(result, &frust, result);
@@ -184,8 +184,8 @@ esOrtho(ESMatrix *result, float left, float right, float bottom, float top, floa
     ortho.m[3][0] = -(right + left) / deltaX;
     ortho.m[1][1] = 2.0f / deltaY;
     ortho.m[3][1] = -(top + bottom) / deltaY;
-    ortho.m[2][2] = -2.0f / deltaZ;
-    ortho.m[3][2] = -(nearZ + farZ) / deltaZ;
+    ortho.m[2][2] = -1.0f / deltaZ;
+    ortho.m[3][2] = -nearZ / deltaZ;
 
     esMatrixMultiply(result, &ortho, result);
 }
