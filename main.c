@@ -75,6 +75,11 @@ fail_if(int cond, const char *format, ...)
 static void
 init_vk(struct vkcube *vc, const char *extension)
 {
+   const char *extensions[2] = {
+      VK_KHR_SURFACE_EXTENSION_NAME,
+   };
+   extensions[1] = extension;
+
    vkCreateInstance(&(VkInstanceCreateInfo) {
          .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
          .pApplicationInfo = &(VkApplicationInfo) {
@@ -82,8 +87,8 @@ init_vk(struct vkcube *vc, const char *extension)
             .pApplicationName = "vkcube",
             .apiVersion = VK_MAKE_VERSION(1, 0, 2),
          },
-         .enabledExtensionCount = (extension != NULL),
-         .ppEnabledExtensionNames = &extension,
+         .enabledExtensionCount = (extensions[1] != NULL) ? 2 : 0,
+         .ppEnabledExtensionNames = extensions,
       },
       NULL,
       &vc->instance);
@@ -843,10 +848,10 @@ init_wayland(struct vkcube *vc)
 
    PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR get_wayland_presentation_support =
       (PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR)
-      vkGetDeviceProcAddr(vc->device, "vkGetPhysicalDeviceWaylandPresentationSupportKHR");
+      vkGetInstanceProcAddr(vc->instance, "vkGetPhysicalDeviceWaylandPresentationSupportKHR");
    PFN_vkCreateWaylandSurfaceKHR create_wayland_surface =
       (PFN_vkCreateWaylandSurfaceKHR)
-      vkGetDeviceProcAddr(vc->device, "vkCreateWaylandSurfaceKHR");
+      vkGetInstanceProcAddr(vc->instance, "vkCreateWaylandSurfaceKHR");
 
    if (!get_wayland_presentation_support(vc->physical_device, 0,
                                          vc->wl.display)) {
