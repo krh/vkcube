@@ -82,8 +82,11 @@ init_vk(struct vkcube *vc, const char *extension)
             .pApplicationName = "vkcube",
             .apiVersion = VK_MAKE_VERSION(1, 0, 2),
          },
-         .enabledExtensionCount = (extension != NULL),
-         .ppEnabledExtensionNames = &extension,
+         .enabledExtensionCount = extension ? 2 : 0,
+         .ppEnabledExtensionNames = (const char *[2]) {
+            VK_KHR_SURFACE_EXTENSION_NAME,
+            extension,
+         },
       },
       NULL,
       &vc->instance);
@@ -843,10 +846,10 @@ init_wayland(struct vkcube *vc)
 
    PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR get_wayland_presentation_support =
       (PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR)
-      vkGetDeviceProcAddr(vc->device, "vkGetPhysicalDeviceWaylandPresentationSupportKHR");
+      vkGetInstanceProcAddr(vc->instance, "vkGetPhysicalDeviceWaylandPresentationSupportKHR");
    PFN_vkCreateWaylandSurfaceKHR create_wayland_surface =
       (PFN_vkCreateWaylandSurfaceKHR)
-      vkGetDeviceProcAddr(vc->device, "vkCreateWaylandSurfaceKHR");
+      vkGetInstanceProcAddr(vc->instance, "vkCreateWaylandSurfaceKHR");
 
    if (!get_wayland_presentation_support(vc->physical_device, 0,
                                          vc->wl.display)) {
