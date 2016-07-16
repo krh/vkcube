@@ -54,6 +54,7 @@
 #include <poll.h>
 #include <math.h>
 #include <assert.h>
+#include <sys/mman.h>
 
 #include "common.h"
 
@@ -975,8 +976,25 @@ static void
 mainloop_wayland(struct vkcube *vc)
 {
    VkResult result = VK_SUCCESS;
+   struct pollfd fds[] = {
+      { wl_display_get_fd(vc->wl.display), POLLIN },
+   };
    while (1) {
       uint32_t index;
+
+      while (wl_display_prepare_read(vc->wl.display) != 0)
+         wl_display_dispatch_pending(vc->wl.display);
+      if (wl_display_flush(vc->wl.display) < 0 && errno != EAGAIN) {
+         wl_display_cancel_read(vc->wl.display);
+         return;
+      }
+      if (poll(fds, 1, 0) > 0) {
+         wl_display_read_events(vc->wl.display);
+         wl_display_dispatch_pending(vc->wl.display);
+      } else {
+         wl_display_cancel_read(vc->wl.display);
+      }
+
       result = vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
                                      VK_NULL_HANDLE, VK_NULL_HANDLE, &index);
       if (result != VK_SUCCESS)
