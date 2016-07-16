@@ -808,6 +808,16 @@ static const struct zxdg_shell_v6_listener xdg_shell_listener = {
 };
 
 static void
+handle_wl_seat_capabilities(void *data, struct wl_seat *wl_seat,
+			    uint32_t capabilities)
+{
+}
+
+static const struct wl_seat_listener wl_seat_listener = {
+   handle_wl_seat_capabilities,
+};
+
+static void
 registry_handle_global(void *data, struct wl_registry *registry,
 		       uint32_t name, const char *interface, uint32_t version)
 {
@@ -819,6 +829,9 @@ registry_handle_global(void *data, struct wl_registry *registry,
    } else if (strcmp(interface, "zxdg_shell_v6") == 0) {
       vc->wl.shell = wl_registry_bind(registry, name, &zxdg_shell_v6_interface, 1);
       zxdg_shell_v6_add_listener(vc->wl.shell, &xdg_shell_listener, vc);
+   } else if (strcmp(interface, "wl_seat") == 0) {
+      vc->wl.seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
+      wl_seat_add_listener(vc->wl.seat, &wl_seat_listener, vc);
    }
 }
 
@@ -839,6 +852,8 @@ init_wayland(struct vkcube *vc)
    vc->wl.display = wl_display_connect(NULL);
    if (!vc->wl.display)
       return;
+
+   vc->wl.seat = NULL;
 
    struct wl_registry *registry = wl_display_get_registry(vc->wl.display);
    wl_registry_add_listener(registry, &registry_listener, vc);

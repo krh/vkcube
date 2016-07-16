@@ -58,6 +58,7 @@ struct vkcube {
       struct wl_display *display;
       struct wl_compositor *compositor;
       struct zxdg_shell_v6 *shell;
+      struct wl_seat *seat;
       struct wl_surface *surface;
       struct zxdg_surface_v6 *xdg_surface;
       struct zxdg_toplevel_v6 *xdg_toplevel;
