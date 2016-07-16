@@ -55,6 +55,7 @@
 #include <math.h>
 #include <assert.h>
 #include <sys/mman.h>
+#include <linux/input.h>
 
 #include "common.h"
 
@@ -809,9 +810,69 @@ static const struct zxdg_shell_v6_listener xdg_shell_listener = {
 };
 
 static void
+handle_wl_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard,
+			  uint32_t format, int32_t fd, uint32_t size)
+{
+}
+
+static void
+handle_wl_keyboard_enter(void *data, struct wl_keyboard *wl_keyboard,
+			 uint32_t serial, struct wl_surface *surface,
+			 struct wl_array *keys)
+{
+}
+
+static void
+handle_wl_keyboard_leave(void *data, struct wl_keyboard *wl_keyboard,
+			 uint32_t serial, struct wl_surface *surface)
+{
+}
+
+static void
+handle_wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
+		       uint32_t serial, uint32_t time, uint32_t key,
+		       uint32_t state)
+{
+    if (key == KEY_ESC && state == WL_KEYBOARD_KEY_STATE_PRESSED)
+      exit(0);
+}
+
+static void
+handle_wl_keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboard,
+			     uint32_t serial, uint32_t mods_depressed,
+			     uint32_t mods_latched, uint32_t mods_locked,
+			     uint32_t group)
+{
+}
+
+static void
+handle_wl_keyboard_repeat_info(void *data, struct wl_keyboard *wl_keyboard,
+			       int32_t rate, int32_t delay)
+{
+}
+
+static const struct wl_keyboard_listener wl_keyboard_listener = {
+   .keymap = handle_wl_keyboard_keymap,
+   .enter = handle_wl_keyboard_enter,
+   .leave = handle_wl_keyboard_leave,
+   .key = handle_wl_keyboard_key,
+   .modifiers = handle_wl_keyboard_modifiers,
+   .repeat_info = handle_wl_keyboard_repeat_info,
+};
+
+static void
 handle_wl_seat_capabilities(void *data, struct wl_seat *wl_seat,
 			    uint32_t capabilities)
 {
+   struct vkcube *vc = data;
+
+   if ((capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && (!vc->wl.keyboard)) {
+      vc->wl.keyboard = wl_seat_get_keyboard(wl_seat);
+      wl_keyboard_add_listener(vc->wl.keyboard, &wl_keyboard_listener, vc);
+   } else if (!(capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && vc->wl.keyboard) {
+      wl_keyboard_destroy(vc->wl.keyboard);
+      vc->wl.keyboard = NULL;
+   }
 }
 
 static const struct wl_seat_listener wl_seat_listener = {
@@ -855,6 +916,7 @@ init_wayland(struct vkcube *vc)
       return;
 
    vc->wl.seat = NULL;
+   vc->wl.keyboard = NULL;
 
    struct wl_registry *registry = wl_display_get_registry(vc->wl.display);
    wl_registry_add_listener(registry, &registry_listener, vc);
