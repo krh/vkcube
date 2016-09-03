@@ -10,7 +10,7 @@
 #include <xcb/xcb.h>
 
 #include <wayland-client.h>
-#include <xdg-shell-client-protocol.h>
+#include <xdg-shell-unstable-v6-client-protocol.h>
 
 #define VK_USE_PLATFORM_XCB_KHR
 #define VK_USE_PLATFORM_WAYLAND_KHR
@@ -57,9 +57,11 @@ struct vkcube {
    struct {
       struct wl_display *display;
       struct wl_compositor *compositor;
-      struct xdg_shell *shell;
+      struct zxdg_shell_v6 *shell;
       struct wl_surface *surface;
-      struct xdg_surface *xdg_surface;
+      struct zxdg_surface_v6 *xdg_surface;
+      struct zxdg_toplevel_v6 *xdg_toplevel;
+      bool wait_for_configure;
    } wl;
 
    VkSwapchainKHR swap_chain;
