@@ -108,7 +108,11 @@ init_vk(struct vkcube *vc, const char *extension)
                         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                         .queueFamilyIndex = 0,
                         .queueCount = 1,
-                     }
+                     },
+                     .enabledExtensionCount = 1,
+                     .ppEnabledExtensionNames = (const char * const []) {
+                        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                     },
                   },
                   NULL,
                   &vc->device);
