@@ -664,6 +664,21 @@ alloc_buffers_xcb(struct vkcube *vc)
                                         &supported);
    assert(supported);
 
+   uint32_t count;
+   vkGetPhysicalDeviceSurfacePresentModesKHR(vc->physical_device, vc->surface,
+                                             &count, NULL);
+   VkPresentModeKHR present_modes[count];
+   vkGetPhysicalDeviceSurfacePresentModesKHR(vc->physical_device, vc->surface,
+                                             &count, present_modes);
+   int i;
+   VkPresentModeKHR present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+   for (i = 0; i < count; i++) {
+      if (present_modes[i] == VK_PRESENT_MODE_FIFO_KHR) {
+         present_mode = VK_PRESENT_MODE_FIFO_KHR;
+         break;
+      }
+   }
+
    vkCreateSwapchainKHR(vc->device,
       &(VkSwapchainCreateInfoKHR) {
          .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -679,7 +694,7 @@ alloc_buffers_xcb(struct vkcube *vc)
          .pQueueFamilyIndices = (uint32_t[]) { 0 },
          .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
          .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-         .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+         .presentMode = present_mode,
       }, NULL, &vc->swap_chain);
 
    vkGetSwapchainImagesKHR(vc->device, vc->swap_chain,
