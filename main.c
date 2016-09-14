@@ -91,8 +91,11 @@ init_vk(struct vkcube *vc, const char *extension)
       NULL,
       &vc->instance);
 
-   uint32_t count = 1;
-   vkEnumeratePhysicalDevices(vc->instance, &count, &vc->physical_device);
+   uint32_t count;
+   vkEnumeratePhysicalDevices(vc->instance, &count, NULL);
+   VkPhysicalDevice pd[count];
+   vkEnumeratePhysicalDevices(vc->instance, &count, pd);
+   vc->physical_device = pd[0];
    printf("%d physical devices\n", count);
 
    VkPhysicalDeviceProperties properties;
