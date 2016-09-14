@@ -159,6 +159,7 @@ init_cube(struct vkcube *vc)
          },
 
          .pViewportState = &(VkPipelineViewportStateCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
             .viewportCount = 1,
             .pViewports = &(VkViewport) {
                 .x = 0,
@@ -179,9 +180,12 @@ init_cube(struct vkcube *vc)
          },
 
          .pMultisampleState = &(VkPipelineMultisampleStateCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
             .rasterizationSamples = 1,
          },
-         .pDepthStencilState = &(VkPipelineDepthStencilStateCreateInfo) {},
+         .pDepthStencilState = &(VkPipelineDepthStencilStateCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO
+         },
 
          .pColorBlendState = &(VkPipelineColorBlendStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,

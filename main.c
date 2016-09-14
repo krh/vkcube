@@ -107,6 +107,7 @@ init_vk(struct vkcube *vc, const char *extension)
                      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
                      .queueCreateInfoCount = 1,
                      .pQueueCreateInfos = &(VkDeviceQueueCreateInfo) {
+                        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                         .queueFamilyIndex = 0,
                         .queueCount = 1,
                      }
