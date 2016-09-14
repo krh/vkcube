@@ -137,7 +137,7 @@ init_vk(struct vkcube *vc, const char *extension)
          .attachmentCount = 1,
          .pAttachments = (VkAttachmentDescription[]) {
             {
-               .format = VK_FORMAT_R8G8B8A8_SRGB,
+               .format = VK_FORMAT_B8G8R8A8_SRGB,
                .samples = 1,
                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
