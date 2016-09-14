@@ -141,8 +141,8 @@ init_vk(struct vkcube *vc, const char *extension)
                .samples = 1,
                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-               .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-               .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+               .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+               .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
             }
          },
          .subpassCount = 1,
