@@ -169,6 +169,11 @@ init_cube(struct vkcube *vc)
                 .minDepth = 0,
                 .maxDepth = 1,
             },
+            .scissorCount = 1,
+            .pScissors = &(VkRect2D) {
+               .offset = { 0, 0 },
+               .extent = { vc->width, vc->height },
+            },
          },
 
          .pRasterizationState = &(VkPipelineRasterizationStateCreateInfo) {
