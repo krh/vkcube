@@ -336,7 +336,8 @@ init_cube(struct vkcube *vc)
                   &(VkBufferCreateInfo) {
                      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                      .size = mem_size,
-                     .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                     .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
+                              VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                      .flags = 0
                   },
                   NULL,
