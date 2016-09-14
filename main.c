@@ -105,6 +105,12 @@ init_vk(struct vkcube *vc, const char *extension)
    printf("vendor id %04x, device name %s\n",
           properties.vendorID, properties.deviceName);
 
+   vkGetPhysicalDeviceQueueFamilyProperties(vc->physical_device, &count, NULL);
+   assert(count > 0);
+   VkQueueFamilyProperties props[count];
+   vkGetPhysicalDeviceQueueFamilyProperties(vc->physical_device, &count, props);
+   assert(props[0].queueFlags & VK_QUEUE_GRAPHICS_BIT);
+
    vkCreateDevice(vc->physical_device,
                   &(VkDeviceCreateInfo) {
                      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
