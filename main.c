@@ -222,6 +222,7 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
    vkCreateFramebuffer(vc->device,
                        &(VkFramebufferCreateInfo) {
                           .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+                          .renderPass = vc->render_pass,
                           .attachmentCount = 1,
                           .pAttachments = &b->view,
                           .width = vc->width,
