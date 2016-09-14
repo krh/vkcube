@@ -649,6 +649,8 @@ alloc_buffers_xcb(struct vkcube *vc)
    VkSurfaceCapabilitiesKHR surface_caps;
    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vc->physical_device, vc->surface,
                                              &surface_caps);
+   assert(surface_caps.supportedCompositeAlpha &
+          VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR);
 
    VkBool32 supported;
    vkGetPhysicalDeviceSurfaceSupportKHR(vc->physical_device, 0, vc->surface,
@@ -669,7 +671,7 @@ alloc_buffers_xcb(struct vkcube *vc)
          .queueFamilyIndexCount = 1,
          .pQueueFamilyIndices = (uint32_t[]) { 0 },
          .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-         .compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
          .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
       }, NULL, &vc->swap_chain);
 
