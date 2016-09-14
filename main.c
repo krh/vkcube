@@ -646,6 +646,11 @@ init_xcb(struct vkcube *vc)
 static void
 alloc_buffers_xcb(struct vkcube *vc)
 {
+   VkBool32 supported;
+   vkGetPhysicalDeviceSurfaceSupportKHR(vc->physical_device, 0, vc->surface,
+                                        &supported);
+   assert(supported);
+
    vkCreateSwapchainKHR(vc->device,
       &(VkSwapchainCreateInfoKHR) {
          .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -1014,6 +1019,11 @@ init_wayland(struct vkcube *vc)
    }
 
    assert(format != VK_FORMAT_UNDEFINED);
+
+   VkBool32 supported;
+   vkGetPhysicalDeviceSurfaceSupportKHR(vc->physical_device, 0, wsi_surface,
+                                        &supported);
+   assert(supported);
 
    vkCreateSwapchainKHR(vc->device,
       &(VkSwapchainCreateInfoKHR) {
