@@ -942,7 +942,7 @@ init_wayland(struct vkcube *vc)
          .queueFamilyIndexCount = 1,
          .pQueueFamilyIndices = (uint32_t[]) { 0 },
          .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-         .compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
          .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
       }, NULL, &vc->swap_chain);
 
