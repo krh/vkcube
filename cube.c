@@ -503,6 +503,7 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
       }, vc->fence);
 
    vkWaitForFences(vc->device, 1, (VkFence[]) { vc->fence }, true, INT64_MAX);
+   vkResetFences(vc->device, 1, &vc->fence);
 
    vkResetCommandPool(vc->device, vc->cmd_pool, 0);
 }
