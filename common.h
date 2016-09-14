@@ -82,6 +82,7 @@ struct vkcube {
    VkDeviceMemory mem;
    VkBuffer buffer;
    VkDescriptorSet descriptor_set;
+   VkSemaphore semaphore;
    VkFence fence;
    VkCommandPool cmd_pool;
 
