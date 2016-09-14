@@ -837,6 +837,11 @@ init_wayland(struct vkcube *vc)
 
    vc->wl.surface = wl_compositor_create_surface(vc->wl.compositor);
 
+   if (!vc->wl.shell) {
+      fprintf(stderr, "Compositor is missing unstable xdg_shell v5 protocol support\n");
+      abort();
+   }
+
    vc->wl.xdg_surface = xdg_shell_get_xdg_surface(vc->wl.shell,
                                                   vc->wl.surface);
    xdg_surface_add_listener(vc->wl.xdg_surface, &xdg_surface_listener, vc);
