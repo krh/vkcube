@@ -646,6 +646,10 @@ init_xcb(struct vkcube *vc)
 static void
 alloc_buffers_xcb(struct vkcube *vc)
 {
+   VkSurfaceCapabilitiesKHR surface_caps;
+   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vc->physical_device, vc->surface,
+                                             &surface_caps);
+
    VkBool32 supported;
    vkGetPhysicalDeviceSurfaceSupportKHR(vc->physical_device, 0, vc->surface,
                                         &supported);
@@ -1019,6 +1023,10 @@ init_wayland(struct vkcube *vc)
    }
 
    assert(format != VK_FORMAT_UNDEFINED);
+
+   VkSurfaceCapabilitiesKHR surface_caps;
+   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vc->physical_device, wsi_surface,
+                                             &surface_caps);
 
    VkBool32 supported;
    vkGetPhysicalDeviceSurfaceSupportKHR(vc->physical_device, 0, wsi_surface,
