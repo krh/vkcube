@@ -189,6 +189,13 @@ init_vk(struct vkcube *vc, const char *extension)
                        },
                        NULL,
                        &vc->cmd_pool);
+
+   vkCreateSemaphore(vc->device,
+                     &(VkSemaphoreCreateInfo) {
+                        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                     },
+                     NULL,
+                     &vc->semaphore);
 }
 
 static void
@@ -766,7 +773,7 @@ mainloop_xcb(struct vkcube *vc)
 
          uint32_t index;
          vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
-                               VK_NULL_HANDLE, VK_NULL_HANDLE, &index);
+                               vc->semaphore, VK_NULL_HANDLE, &index);
 
          vc->model.render(vc, &vc->buffers[index]);
 
@@ -972,7 +979,7 @@ mainloop_wayland(struct vkcube *vc)
    while (1) {
       uint32_t index;
       result = vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
-                                     VK_NULL_HANDLE, VK_NULL_HANDLE, &index);
+                                     vc->semaphore, VK_NULL_HANDLE, &index);
       if (result != VK_SUCCESS)
          return;
 
