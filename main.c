@@ -966,6 +966,7 @@ init_wayland(struct vkcube *vc)
 
    vc->wl.seat = NULL;
    vc->wl.keyboard = NULL;
+   vc->wl.shell = NULL;
 
    struct wl_registry *registry = wl_display_get_registry(vc->wl.display);
    wl_registry_add_listener(registry, &registry_listener, vc);
