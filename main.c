@@ -132,7 +132,7 @@ init_vk_objects(struct vkcube *vc)
          .attachmentCount = 1,
          .pAttachments = (VkAttachmentDescription[]) {
             {
-               .format = VK_FORMAT_R8G8B8A8_SRGB,
+               .format = vc->image_format,
                .samples = 1,
                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -196,7 +196,7 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
                         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                         .image = b->image,
                         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                        .format = VK_FORMAT_B8G8R8A8_SRGB,
+                        .format = vc->image_format,
                         .components = {
                            .r = VK_COMPONENT_SWIZZLE_R,
                            .g = VK_COMPONENT_SWIZZLE_G,
@@ -300,6 +300,7 @@ static void
 init_headless(struct vkcube *vc)
 {
    init_vk(vc, NULL);
+   vc->image_format = VK_FORMAT_B8G8R8A8_SRGB,
    init_vk_objects(vc);
 
    struct vkcube_buffer *b = &vc->buffers[0];
@@ -308,7 +309,7 @@ init_headless(struct vkcube *vc)
                  &(VkImageCreateInfo) {
                     .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
                     .imageType = VK_IMAGE_TYPE_2D,
-                    .format = VK_FORMAT_B8G8R8A8_SRGB,
+                    .format = vc->image_format,
                     .extent = { .width = vc->width, .height = vc->height, .depth = 1 },
                     .mipLevels = 1,
                     .arrayLayers = 1,
@@ -450,6 +451,7 @@ init_kms(struct vkcube *vc)
    vc->gbm_device = gbm_create_device(vc->fd);
 
    init_vk(vc, NULL);
+   vc->image_format = VK_FORMAT_R8G8B8A8_SRGB,
    init_vk_objects(vc);
 
    PFN_vkCreateDmaBufImageINTEL create_dma_buf_image =
@@ -468,7 +470,7 @@ init_kms(struct vkcube *vc)
                            &(VkDmaBufImageCreateInfo) {
                               .sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
                               .fd = fd,
-                              .format = VK_FORMAT_R8G8B8A8_SRGB,
+                              .format = vc->image_format,
                               .extent = { vc->width, vc->height, 1 },
                               .strideInBytes = stride
                            },
@@ -551,7 +553,7 @@ mainloop_vt(struct vkcube *vc)
 
 /* Swapchain-based code - shared between XCB and Wayland */
 
-static VkFormat
+static void
 choose_surface_format(struct vkcube *vc)
 {
    uint32_t num_formats = 0;
@@ -584,20 +586,18 @@ choose_surface_format(struct vkcube *vc)
 
    assert(format != VK_FORMAT_UNDEFINED);
 
-   return format;
+   vc->image_format = format;
 }
 
 static void
 create_swapchain(struct vkcube *vc)
 {
-   VkFormat format = choose_surface_format(vc);
-
    vkCreateSwapchainKHR(vc->device,
       &(VkSwapchainCreateInfoKHR) {
          .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
          .surface = vc->surface,
          .minImageCount = 2,
-         .imageFormat = format,
+         .imageFormat = vc->image_format,
          .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
          .imageExtent = { vc->width, vc->height },
          .imageArrayLayers = 1,
@@ -700,7 +700,6 @@ init_xcb(struct vkcube *vc)
    xcb_flush(vc->xcb.conn);
 
    init_vk(vc, VK_KHR_XCB_SURFACE_EXTENSION_NAME);
-   init_vk_objects(vc);
 
    if (!vkGetPhysicalDeviceXcbPresentationSupportKHR(vc->physical_device, 0,
                                                      vc->xcb.conn,
@@ -715,6 +714,10 @@ init_xcb(struct vkcube *vc)
          .connection = vc->xcb.conn,
          .window = vc->xcb.window,
       }, NULL, &vc->surface);
+
+   choose_surface_format(vc);
+
+   init_vk_objects(vc);
 
    vc->image_count = 0;
 }
@@ -901,7 +904,6 @@ init_wayland(struct vkcube *vc)
    xdg_surface_set_title(vc->wl.xdg_surface, "vkcube");
 
    init_vk(vc, VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
-   init_vk_objects(vc);
 
    PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR get_wayland_presentation_support =
       (PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR)
@@ -922,6 +924,10 @@ init_wayland(struct vkcube *vc)
          .display = vc->wl.display,
          .surface = vc->wl.surface,
       }, NULL, &vc->surface);
+
+   choose_surface_format(vc);
+
+   init_vk_objects(vc);
 
    create_swapchain(vc);
 }
