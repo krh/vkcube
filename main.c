@@ -121,7 +121,11 @@ init_vk(struct vkcube *vc, const char *extension)
                   &vc->device);
 
    vkGetDeviceQueue(vc->device, 0, 0, &vc->queue);
+}
 
+static void
+init_vk_objects(struct vkcube *vc)
+{
    vkCreateRenderPass(vc->device,
       &(VkRenderPassCreateInfo) {
          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
@@ -296,6 +300,7 @@ static void
 init_headless(struct vkcube *vc)
 {
    init_vk(vc, NULL);
+   init_vk_objects(vc);
 
    struct vkcube_buffer *b = &vc->buffers[0];
 
@@ -445,6 +450,7 @@ init_kms(struct vkcube *vc)
    vc->gbm_device = gbm_create_device(vc->fd);
 
    init_vk(vc, NULL);
+   init_vk_objects(vc);
 
    PFN_vkCreateDmaBufImageINTEL create_dma_buf_image =
       (PFN_vkCreateDmaBufImageINTEL)vkGetDeviceProcAddr(vc->device, "vkCreateDmaBufImageINTEL");
@@ -694,6 +700,7 @@ init_xcb(struct vkcube *vc)
    xcb_flush(vc->xcb.conn);
 
    init_vk(vc, VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+   init_vk_objects(vc);
 
    if (!vkGetPhysicalDeviceXcbPresentationSupportKHR(vc->physical_device, 0,
                                                      vc->xcb.conn,
@@ -894,6 +901,7 @@ init_wayland(struct vkcube *vc)
    xdg_surface_set_title(vc->wl.xdg_surface, "vkcube");
 
    init_vk(vc, VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+   init_vk_objects(vc);
 
    PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR get_wayland_presentation_support =
       (PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR)
