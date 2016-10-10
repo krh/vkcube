@@ -105,8 +105,16 @@ init_vk(struct vkcube *vc, const char *extension)
                      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
                      .queueCreateInfoCount = 1,
                      .pQueueCreateInfos = &(VkDeviceQueueCreateInfo) {
+                        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                         .queueFamilyIndex = 0,
                         .queueCount = 1,
+                        .pQueuePriorities = (float[]) {
+                           0.0,
+                        },
+                     },
+                     .enabledExtensionCount = 1,
+                     .ppEnabledExtensionNames = (const char *[]) {
+                        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
                      }
                   },
                   NULL,
@@ -205,6 +213,7 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
    vkCreateFramebuffer(vc->device,
                        &(VkFramebufferCreateInfo) {
                           .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+                          .renderPass = vc->render_pass,
                           .attachmentCount = 1,
                           .pAttachments = &b->view,
                           .width = vc->width,
