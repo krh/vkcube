@@ -159,6 +159,7 @@ init_cube(struct vkcube *vc)
          },
 
          .pViewportState = &(VkPipelineViewportStateCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
             .viewportCount = 1,
             .pViewports = &(VkViewport) {
                 .x = 0,
@@ -168,6 +169,11 @@ init_cube(struct vkcube *vc)
                 .minDepth = 0,
                 .maxDepth = 1,
             },
+            .scissorCount = 1,
+            .pScissors = &(VkRect2D) {
+                .offset = { 0, 0, },
+                .extent = { vc->width, vc->height },
+            },
          },
 
          .pRasterizationState = &(VkPipelineRasterizationStateCreateInfo) {
@@ -175,13 +181,17 @@ init_cube(struct vkcube *vc)
             .rasterizerDiscardEnable = false,
             .polygonMode = VK_POLYGON_MODE_FILL,
             .cullMode = VK_CULL_MODE_BACK_BIT,
-            .frontFace = VK_FRONT_FACE_CLOCKWISE
+            .frontFace = VK_FRONT_FACE_CLOCKWISE,
+            .lineWidth = 1.0,
          },
 
          .pMultisampleState = &(VkPipelineMultisampleStateCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
             .rasterizationSamples = 1,
          },
-         .pDepthStencilState = &(VkPipelineDepthStencilStateCreateInfo) {},
+         .pDepthStencilState = &(VkPipelineDepthStencilStateCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+         },
 
          .pColorBlendState = &(VkPipelineColorBlendStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -326,7 +336,8 @@ init_cube(struct vkcube *vc)
                   &(VkBufferCreateInfo) {
                      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                      .size = mem_size,
-                     .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                     .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                              VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                      .flags = 0
                   },
                   NULL,

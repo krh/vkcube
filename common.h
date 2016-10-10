@@ -86,6 +86,7 @@ struct vkcube {
 
    struct timeval start_tv;
    VkSurfaceKHR surface;
+   VkFormat image_format;
    struct vkcube_buffer buffers[MAX_NUM_IMAGES];
    uint32_t image_count;
    int current;
