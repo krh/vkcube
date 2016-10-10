@@ -23,7 +23,7 @@ BUILT_SOURCES = \
 
 vkcube_SOURCES =				\
 	$(BUILT_SOURCES)			\
-	xdg-shell-protocol.c			\
+	xdg-shell-unstable-v6-protocol.c	\
 	main.c					\
 	common.h				\
 	cube.c					\

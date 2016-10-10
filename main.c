@@ -54,6 +54,8 @@
 #include <poll.h>
 #include <math.h>
 #include <assert.h>
+#include <sys/mman.h>
+#include <linux/input.h>
 
 #include "common.h"
 
@@ -763,34 +765,119 @@ mainloop_xcb(struct vkcube *vc)
 /* Wayland display code - render to Wayland window */
 
 static void
-handle_xdg_surface_configure(void *data, struct xdg_surface *surface,
-                             int32_t width, int32_t height,
-                             struct wl_array *states, uint32_t serial)
+handle_xdg_surface_configure(void *data, struct zxdg_surface_v6 *surface,
+                             uint32_t serial)
 {
-   xdg_surface_ack_configure(surface, serial);
+   struct vkcube *vc = data;
+
+   zxdg_surface_v6_ack_configure(surface, serial);
+
+   if (vc->wl.wait_for_configure) {
+      // redraw
+      vc->wl.wait_for_configure = false;
+   }
 }
 
-static void
-handle_xdg_surface_delete(void *data, struct xdg_surface *xdg_surface)
-{
-}
-
-static const struct xdg_surface_listener xdg_surface_listener = {
+static const struct zxdg_surface_v6_listener xdg_surface_listener = {
    handle_xdg_surface_configure,
-   handle_xdg_surface_delete,
 };
 
 static void
-handle_xdg_shell_ping(void *data, struct xdg_shell *shell, uint32_t serial)
+handle_xdg_toplevel_configure(void *data, struct zxdg_toplevel_v6 *toplevel,
+                              int32_t width, int32_t height,
+                              struct wl_array *states)
 {
-   xdg_shell_pong(shell, serial);
 }
 
-static const struct xdg_shell_listener xdg_shell_listener = {
+static void
+handle_xdg_toplevel_close(void *data, struct zxdg_toplevel_v6 *toplevel)
+{
+}
+
+static const struct zxdg_toplevel_v6_listener xdg_toplevel_listener = {
+   handle_xdg_toplevel_configure,
+   handle_xdg_toplevel_close,
+};
+
+static void
+handle_xdg_shell_ping(void *data, struct zxdg_shell_v6 *shell, uint32_t serial)
+{
+   zxdg_shell_v6_pong(shell, serial);
+}
+
+static const struct zxdg_shell_v6_listener xdg_shell_listener = {
    handle_xdg_shell_ping,
 };
 
-#define XDG_VERSION 5 /* The version of xdg-shell that we implement */
+static void
+handle_wl_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard,
+			  uint32_t format, int32_t fd, uint32_t size)
+{
+}
+
+static void
+handle_wl_keyboard_enter(void *data, struct wl_keyboard *wl_keyboard,
+			 uint32_t serial, struct wl_surface *surface,
+			 struct wl_array *keys)
+{
+}
+
+static void
+handle_wl_keyboard_leave(void *data, struct wl_keyboard *wl_keyboard,
+			 uint32_t serial, struct wl_surface *surface)
+{
+}
+
+static void
+handle_wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
+		       uint32_t serial, uint32_t time, uint32_t key,
+		       uint32_t state)
+{
+    if (key == KEY_ESC && state == WL_KEYBOARD_KEY_STATE_PRESSED)
+      exit(0);
+}
+
+static void
+handle_wl_keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboard,
+			     uint32_t serial, uint32_t mods_depressed,
+			     uint32_t mods_latched, uint32_t mods_locked,
+			     uint32_t group)
+{
+}
+
+static void
+handle_wl_keyboard_repeat_info(void *data, struct wl_keyboard *wl_keyboard,
+			       int32_t rate, int32_t delay)
+{
+}
+
+static const struct wl_keyboard_listener wl_keyboard_listener = {
+   .keymap = handle_wl_keyboard_keymap,
+   .enter = handle_wl_keyboard_enter,
+   .leave = handle_wl_keyboard_leave,
+   .key = handle_wl_keyboard_key,
+   .modifiers = handle_wl_keyboard_modifiers,
+   .repeat_info = handle_wl_keyboard_repeat_info,
+};
+
+static void
+handle_wl_seat_capabilities(void *data, struct wl_seat *wl_seat,
+			    uint32_t capabilities)
+{
+   struct vkcube *vc = data;
+
+   if ((capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && (!vc->wl.keyboard)) {
+      vc->wl.keyboard = wl_seat_get_keyboard(wl_seat);
+      wl_keyboard_add_listener(vc->wl.keyboard, &wl_keyboard_listener, vc);
+   } else if (!(capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && vc->wl.keyboard) {
+      wl_keyboard_destroy(vc->wl.keyboard);
+      vc->wl.keyboard = NULL;
+   }
+}
+
+static const struct wl_seat_listener wl_seat_listener = {
+   handle_wl_seat_capabilities,
+};
 
 static void
 registry_handle_global(void *data, struct wl_registry *registry,
@@ -801,10 +888,12 @@ registry_handle_global(void *data, struct wl_registry *registry,
    if (strcmp(interface, "wl_compositor") == 0) {
       vc->wl.compositor = wl_registry_bind(registry, name,
                                            &wl_compositor_interface, 1);
-   } else if (strcmp(interface, "xdg_shell") == 0) {
-      vc->wl.shell = wl_registry_bind(registry, name, &xdg_shell_interface, 1);
-      xdg_shell_add_listener(vc->wl.shell, &xdg_shell_listener, vc);
-      xdg_shell_use_unstable_version(vc->wl.shell, XDG_VERSION);
+   } else if (strcmp(interface, "zxdg_shell_v6") == 0) {
+      vc->wl.shell = wl_registry_bind(registry, name, &zxdg_shell_v6_interface, 1);
+      zxdg_shell_v6_add_listener(vc->wl.shell, &xdg_shell_listener, vc);
+   } else if (strcmp(interface, "wl_seat") == 0) {
+      vc->wl.seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
+      wl_seat_add_listener(vc->wl.seat, &wl_seat_listener, vc);
    }
 }
 
@@ -826,6 +915,9 @@ init_wayland(struct vkcube *vc)
    if (!vc->wl.display)
       return;
 
+   vc->wl.seat = NULL;
+   vc->wl.keyboard = NULL;
+
    struct wl_registry *registry = wl_display_get_registry(vc->wl.display);
    wl_registry_add_listener(registry, &registry_listener, vc);
 
@@ -837,10 +929,23 @@ init_wayland(struct vkcube *vc)
 
    vc->wl.surface = wl_compositor_create_surface(vc->wl.compositor);
 
-   vc->wl.xdg_surface = xdg_shell_get_xdg_surface(vc->wl.shell,
-                                                  vc->wl.surface);
-   xdg_surface_add_listener(vc->wl.xdg_surface, &xdg_surface_listener, vc);
-   xdg_surface_set_title(vc->wl.xdg_surface, "vkcube");
+   if (!vc->wl.shell) {
+      fprintf(stderr, "Compositor is missing unstable zxdg_shell_v6 protocol support\n");
+      abort();
+   }
+
+   vc->wl.xdg_surface = zxdg_shell_v6_get_xdg_surface(vc->wl.shell,
+                                                      vc->wl.surface);
+
+   zxdg_surface_v6_add_listener(vc->wl.xdg_surface, &xdg_surface_listener, vc);
+
+   vc->wl.xdg_toplevel = zxdg_surface_v6_get_toplevel(vc->wl.xdg_surface);
+
+   zxdg_toplevel_v6_add_listener(vc->wl.xdg_toplevel, &xdg_toplevel_listener, vc);
+   zxdg_toplevel_v6_set_title(vc->wl.xdg_toplevel, "vkcube");
+
+   vc->wl.wait_for_configure = true;
+   wl_surface_commit(vc->wl.surface);
 
    init_vk(vc, VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 
@@ -933,8 +1038,25 @@ static void
 mainloop_wayland(struct vkcube *vc)
 {
    VkResult result = VK_SUCCESS;
+   struct pollfd fds[] = {
+      { wl_display_get_fd(vc->wl.display), POLLIN },
+   };
    while (1) {
       uint32_t index;
+
+      while (wl_display_prepare_read(vc->wl.display) != 0)
+         wl_display_dispatch_pending(vc->wl.display);
+      if (wl_display_flush(vc->wl.display) < 0 && errno != EAGAIN) {
+         wl_display_cancel_read(vc->wl.display);
+         return;
+      }
+      if (poll(fds, 1, 0) > 0) {
+         wl_display_read_events(vc->wl.display);
+         wl_display_dispatch_pending(vc->wl.display);
+      } else {
+         wl_display_cancel_read(vc->wl.display);
+      }
+
       result = vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
                                      VK_NULL_HANDLE, VK_NULL_HANDLE, &index);
       if (result != VK_SUCCESS)
