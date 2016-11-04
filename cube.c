@@ -161,19 +161,7 @@ init_cube(struct vkcube *vc)
          .pViewportState = &(VkPipelineViewportStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
             .viewportCount = 1,
-            .pViewports = &(VkViewport) {
-                .x = 0,
-                .y = 0,
-                .width = vc->width,
-                .height = vc->height,
-                .minDepth = 0,
-                .maxDepth = 1,
-            },
             .scissorCount = 1,
-            .pScissors = &(VkRect2D) {
-               .offset = { 0, 0 },
-               .extent = { vc->width, vc->height },
-            },
          },
 
          .pRasterizationState = &(VkPipelineRasterizationStateCreateInfo) {
@@ -202,6 +190,15 @@ init_cube(struct vkcube *vc)
                                    VK_COLOR_COMPONENT_G_BIT |
                                    VK_COLOR_COMPONENT_B_BIT },
             }
+         },
+
+         .pDynamicState = &(VkPipelineDynamicStateCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+            .dynamicStateCount = 2,
+            .pDynamicStates = (VkDynamicState[]) {
+                VK_DYNAMIC_STATE_VIEWPORT,
+                VK_DYNAMIC_STATE_SCISSOR,
+            },
          },
 
          .flags = 0,
@@ -478,6 +475,12 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
       .maxDepth = 1,
    };
    vkCmdSetViewport(cmd_buffer, 0, 1, &viewport);
+
+   const VkRect2D scissor = {
+      .offset = { 0, 0 },
+      .extent = { vc->width, vc->height },
+   };
+   vkCmdSetScissor(cmd_buffer, 0, 1, &scissor);
 
    vkCmdDraw(cmd_buffer, 4, 1, 0, 0);
    vkCmdDraw(cmd_buffer, 4, 1, 4, 0);
