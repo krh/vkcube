@@ -1167,13 +1167,43 @@ mainloop_wayland(struct vkcube *vc)
 
 extern struct model cube_model;
 
+static bool
+display_mode_from_string(const char *s, enum display_mode *mode)
+{
+   if (streq(s, "auto")) {
+      *mode = DISPLAY_MODE_AUTO;
+      return true;
+   } else if (streq(s, "headless")) {
+      *mode = DISPLAY_MODE_HEADLESS;
+      return true;
+   } else if (streq(s, "kms")) {
+      *mode = DISPLAY_MODE_KMS;
+      return true;
+   } else if (streq(s, "wayland")) {
+      *mode = DISPLAY_MODE_WAYLAND;
+      return true;
+   } else if (streq(s, "xcb")) {
+      *mode = DISPLAY_MODE_XCB;
+      return true;
+   } else {
+      return false;
+   }
+}
+
 static void
 print_usage(FILE *f)
 {
    const char *usage =
       "usage: vkcube [-n] [-o <file>]\n"
       "\n"
-      "  -n          Don't initialize vt or kms, run headless.\n"
+      "  -n          Don't initialize vt or kms, run headless. This option\n"
+      "              is equivalent to '-m headless'.\n"
+      "\n"
+      "  -m <mode>   Choose display mode, where <mode> is one of\n"
+      "              \"auto\" (the default), \"headless\", \"kms\",\n"
+      "              \"wayland\", or \"xcb\". This option is incompatible\n"
+      "              with '-n'.\n"
+      "\n"
       "  -o <file>   Path to output image when running headless. Default\n"
       "              is \"./cube.png\".\n"
       ;
@@ -1206,13 +1236,21 @@ parse_args(int argc, char *argv[])
     * The initial ':' in the optstring makes getopt return ':' when an option
     * is missing a required argument.
     */
-   static const char *optstring = "+:no:";
+   static const char *optstring = "+:nm:o:";
 
    int opt;
+   bool found_arg_headless = false;
+   bool found_arg_display_mode = false;
 
    while ((opt = getopt(argc, argv, optstring)) != -1) {
       switch (opt) {
+      case 'm':
+         found_arg_display_mode = true;
+         if (!display_mode_from_string(optarg, &display_mode))
+            usage_error("option -m given bad display mode");
+         break;
       case 'n':
+         found_arg_headless = true;
          display_mode = DISPLAY_MODE_HEADLESS;
          break;
       case 'o':
@@ -1229,6 +1267,9 @@ parse_args(int argc, char *argv[])
          break;
       }
    }
+
+   if (found_arg_headless && found_arg_display_mode)
+      usage_error("options -n and -m are mutually exclusive");
 
    if (optind != argc)
       usage_error("trailing args");
