@@ -58,7 +58,15 @@
 
 #include "common.h"
 
-static bool arg_headless = false;
+enum display_mode {
+   DISPLAY_MODE_AUTO = 0,
+   DISPLAY_MODE_HEADLESS,
+   DISPLAY_MODE_KMS,
+   DISPLAY_MODE_WAYLAND,
+   DISPLAY_MODE_XCB,
+};
+
+static enum display_mode display_mode = DISPLAY_MODE_AUTO;
 static const char *arg_out_file = "./cube.png";
 
 void noreturn
@@ -1205,7 +1213,7 @@ parse_args(int argc, char *argv[])
    while ((opt = getopt(argc, argv, optstring)) != -1) {
       switch (opt) {
       case 'n':
-         arg_headless = true;
+         display_mode = DISPLAY_MODE_HEADLESS;
          break;
       case 'o':
          arg_out_file = xstrdup(optarg);
@@ -1226,6 +1234,73 @@ parse_args(int argc, char *argv[])
       usage_error("trailing args");
 }
 
+static void
+init_display(struct vkcube *vc)
+{
+   switch (display_mode) {
+   case DISPLAY_MODE_AUTO:
+      display_mode = DISPLAY_MODE_WAYLAND;
+      if (init_wayland(vc) == -1) {
+         fprintf(stderr, "failed to initialize wayland, falling back "
+                         "to xcb\n");
+         display_mode = DISPLAY_MODE_XCB;
+         if (init_xcb(vc) == -1) {
+            fprintf(stderr, "failed to initialize xcb, falling back "
+                            "to kms\n");
+            display_mode = DISPLAY_MODE_KMS;
+            if (init_kms(vc) == -1) {
+               fprintf(stderr, "failed to initialize xcb, falling "
+                               "back to headless\n");
+               display_mode = DISPLAY_MODE_HEADLESS;
+               if (init_headless(vc) == -1) {
+                  fail("failed to initialize headless mode");
+               }
+            }
+         }
+      }
+      break;
+   case DISPLAY_MODE_HEADLESS:
+      if (init_headless(vc) == -1)
+         fail("failed to initialize headless mode");
+      break;
+   case DISPLAY_MODE_KMS:
+      if (init_kms(vc) == -1)
+         fail("failed to initialize kms");
+      break;
+   case DISPLAY_MODE_WAYLAND:
+      if (init_wayland(vc) == -1)
+         fail("failed to initialize wayland");
+      break;
+   case DISPLAY_MODE_XCB:
+      if (init_xcb(vc) == -1)
+         fail("failed to initialize xcb");
+      break;
+   }
+}
+
+static void
+mainloop(struct vkcube *vc)
+{
+   switch (display_mode) {
+   case DISPLAY_MODE_AUTO:
+      assert(!"display mode is unset");
+      break;
+   case DISPLAY_MODE_WAYLAND:
+      mainloop_wayland(vc);
+      break;
+   case DISPLAY_MODE_XCB:
+      mainloop_xcb(vc);
+      break;
+   case DISPLAY_MODE_KMS:
+      mainloop_vt(vc);
+      break;
+   case DISPLAY_MODE_HEADLESS:
+      vc->model.render(vc, &vc->buffers[0]);
+      write_buffer(vc, &vc->buffers[0]);
+      break;
+   }
+}
+
 int main(int argc, char *argv[])
 {
    struct vkcube vc;
@@ -1240,38 +1315,8 @@ int main(int argc, char *argv[])
    vc.height = 768;
    gettimeofday(&vc.start_tv, NULL);
 
-   if (arg_headless) {
-      if (init_headless(&vc) == -1) {
-         fail("failed to initialize headless mode");
-      }
-   } else {
-      if (init_wayland(&vc) == -1) {
-         fprintf(stderr, "failed to initialize wayland, falling back "
-                         "to xcb\n");
-         if (init_xcb(&vc) == -1) {
-            fprintf(stderr, "failed to initialize xcb, falling back "
-                            "to kms\n");
-            if (init_kms(&vc) == -1) {
-               fprintf(stderr, "failed to initialize xcb, falling "
-                               "back to headless\n");
-               if (init_headless(&vc) == -1) {
-                  fail("failed to initialize headless mode");
-               }
-            }
-         }
-      }
-   }
-
-   if (vc.wl.surface) {
-      mainloop_wayland(&vc);
-   } else if (vc.xcb.window) {
-      mainloop_xcb(&vc);
-   } else if (vc.gbm_device) {
-      mainloop_vt(&vc);
-   } else {
-      vc.model.render(&vc, &vc.buffers[0]);
-      write_buffer(&vc, &vc.buffers[0]);
-   }
+   init_display(&vc);
+   mainloop(&vc);
 
    return 0;
 }
