@@ -1236,6 +1236,9 @@ int main(int argc, char *argv[])
          init_xcb(&vc);
          if (vc.xcb.window == XCB_NONE) {
             init_kms(&vc);
+            if (vc.gbm_device == NULL) {
+               init_headless(&vc);
+            }
          }
       }
    }
