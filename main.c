@@ -59,7 +59,9 @@
 
 #include "common.h"
 
-static void
+#define printflike(a, b) __attribute__((format(printf, (a), (b))))
+
+static void printflike(2, 3)
 fail_if(int cond, const char *format, ...)
 {
    va_list args;
