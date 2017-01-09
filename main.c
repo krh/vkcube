@@ -40,6 +40,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdnoreturn.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
@@ -61,6 +62,24 @@
 
 #define printflike(a, b) __attribute__((format(printf, (a), (b))))
 
+static void noreturn
+failv(const char *format, va_list args)
+{
+   vfprintf(stderr, format, args);
+   fprintf(stderr, "\n");
+   exit(1);
+}
+
+static void printflike(1,2) noreturn
+fail(const char *format, ...)
+{
+   va_list args;
+
+   va_start(args, format);
+   failv(format, args);
+   va_end(args);
+}
+
 static void printflike(2, 3)
 fail_if(int cond, const char *format, ...)
 {
@@ -70,11 +89,8 @@ fail_if(int cond, const char *format, ...)
       return;
 
    va_start(args, format);
-   vfprintf(stderr, format, args);
+   failv(format, args);
    va_end(args);
-   fprintf(stderr, "\n");
-
-   exit(1);
 }
 
 static void
@@ -747,8 +763,7 @@ init_xcb(struct vkcube *vc)
    if (!vkGetPhysicalDeviceXcbPresentationSupportKHR(vc->physical_device, 0,
                                                      vc->xcb.conn,
                                                      iter.data->root_visual)) {
-      fprintf(stderr, "Vulkan not supported on given X window\n");
-      abort();
+      fail("Vulkan not supported on given X window");
    }
 
    vkCreateXcbSurfaceKHR(vc->instance,
@@ -1032,10 +1047,8 @@ init_wayland(struct vkcube *vc)
 
    vc->wl.surface = wl_compositor_create_surface(vc->wl.compositor);
 
-   if (!vc->wl.shell) {
-      fprintf(stderr, "Compositor is missing unstable zxdg_shell_v6 protocol support\n");
-      abort();
-   }
+   if (!vc->wl.shell)
+      fail("Compositor is missing unstable zxdg_shell_v6 protocol support");
 
    vc->wl.xdg_surface = zxdg_shell_v6_get_xdg_surface(vc->wl.shell,
                                                       vc->wl.surface);
@@ -1061,8 +1074,7 @@ init_wayland(struct vkcube *vc)
 
    if (!get_wayland_presentation_support(vc->physical_device, 0,
                                          vc->wl.display)) {
-      fprintf(stderr, "Vulkan not supported on given Wayland surface\n");
-      abort();
+      fail("Vulkan not supported on given Wayland surface");
    }
 
    create_wayland_surface(vc->instance,
