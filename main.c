@@ -70,6 +70,7 @@ fail_if(int cond, const char *format, ...)
    va_start(args, format);
    vfprintf(stderr, format, args);
    va_end(args);
+   fprintf(stderr, "\n");
 
    exit(1);
 }
@@ -744,7 +745,7 @@ init_xcb(struct vkcube *vc)
    if (!vkGetPhysicalDeviceXcbPresentationSupportKHR(vc->physical_device, 0,
                                                      vc->xcb.conn,
                                                      iter.data->root_visual)) {
-      fprintf(stderr, "Vulkan not supported on given X window");
+      fprintf(stderr, "Vulkan not supported on given X window\n");
       abort();
    }
 
@@ -1058,7 +1059,7 @@ init_wayland(struct vkcube *vc)
 
    if (!get_wayland_presentation_support(vc->physical_device, 0,
                                          vc->wl.display)) {
-      fprintf(stderr, "Vulkan not supported on given Wayland surface");
+      fprintf(stderr, "Vulkan not supported on given Wayland surface\n");
       abort();
    }
 
