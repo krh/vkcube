@@ -42,6 +42,8 @@ static char fs_spirv_source[] = {
 static void
 init_cube(struct vkcube *vc)
 {
+   VkResult r;
+
    VkDescriptorSetLayout set_layout;
    vkCreateDescriptorSetLayout(vc->device,
                                &(VkDescriptorSetLayoutCreateInfo) {
@@ -324,7 +326,9 @@ init_cube(struct vkcube *vc)
                     NULL,
                     &vc->mem);
 
-   vkMapMemory(vc->device, vc->mem, 0, mem_size, 0, &vc->map);
+   r = vkMapMemory(vc->device, vc->mem, 0, mem_size, 0, &vc->map);
+   if (r != VK_SUCCESS)
+      fail("vkMapMemory failed");
    memcpy(vc->map + vc->vertex_offset, vVertices, sizeof(vVertices));
    memcpy(vc->map + vc->colors_offset, vColors, sizeof(vColors));
    memcpy(vc->map + vc->normals_offset, vNormals, sizeof(vNormals));
