@@ -1,3 +1,5 @@
+#include <stdarg.h>
+#include <stdnoreturn.h>
 #include <sys/time.h>
 #include <stdbool.h>
 #include <string.h>
@@ -21,6 +23,8 @@
 #include <gbm.h>
 
 #include "esUtil.h"
+
+#define printflike(a, b) __attribute__((format(printf, (a), (b))))
 
 #define MAX_NUM_IMAGES 4
 
@@ -96,3 +100,7 @@ struct vkcube {
    uint32_t image_count;
    int current;
 };
+
+void noreturn failv(const char *format, va_list args);
+void noreturn fail(const char *format, ...) printflike(1, 2) ;
+void fail_if(int cond, const char *format, ...) printflike(2, 3);
