@@ -342,7 +342,8 @@ write_buffer(struct vkcube *vc, struct vkcube_buffer *b)
    write_png(filename, vc->width, vc->height, b->stride, map);
 }
 
-static void
+// Return -1 on failure.
+static int
 init_headless(struct vkcube *vc)
 {
    init_vk(vc, NULL);
@@ -384,6 +385,8 @@ init_headless(struct vkcube *vc)
    b->stride = vc->width * 4;
 
    init_buffer(vc, &vc->buffers[0]);
+
+   return 0;
 }
 
 /* KMS display code - render to kernel modesetting fb */
@@ -455,7 +458,8 @@ init_vt(struct vkcube *vc)
    return 0;
 }
 
-static void
+// Return -1 on failure.
+static int
 init_kms(struct vkcube *vc)
 {
    drmModeRes *resources;
@@ -464,7 +468,7 @@ init_kms(struct vkcube *vc)
    int i;
 
    if (init_vt(vc) == -1)
-      return;
+      return -1;
 
    vc->fd = open("/dev/dri/card0", O_RDWR);
    fail_if(vc->fd == -1, "failed to open /dev/dri/card0\n");
@@ -536,6 +540,8 @@ init_kms(struct vkcube *vc)
 
       init_buffer(vc, b);
    }
+
+   return 0;
 }
 
 static void
@@ -715,7 +721,8 @@ get_atom(struct xcb_connection_t *conn, const char *name)
    return atom;
 }
 
-static void
+// Return -1 on failure.
+static int
 init_xcb(struct vkcube *vc)
 {
    xcb_screen_iterator_t iter;
@@ -723,7 +730,7 @@ init_xcb(struct vkcube *vc)
 
    vc->xcb.conn = xcb_connect(0, 0);
    if (xcb_connection_has_error(vc->xcb.conn))
-      return;
+      return -1;
 
    vc->xcb.window = xcb_generate_id(vc->xcb.conn);
 
@@ -789,6 +796,8 @@ init_xcb(struct vkcube *vc)
    init_vk_objects(vc);
 
    vc->image_count = 0;
+
+   return 0;
 }
 
 static void
@@ -1036,12 +1045,13 @@ static const struct wl_registry_listener registry_listener = {
    registry_handle_global_remove
 };
 
-static void
+// Return -1 on failure.
+static int
 init_wayland(struct vkcube *vc)
 {
    vc->wl.display = wl_display_connect(NULL);
    if (!vc->wl.display)
-      return;
+      return -1;
 
    vc->wl.seat = NULL;
    vc->wl.keyboard = NULL;
@@ -1100,6 +1110,8 @@ init_wayland(struct vkcube *vc)
    init_vk_objects(vc);
 
    create_swapchain(vc);
+
+   return 0;
 }
 
 static void
@@ -1229,15 +1241,22 @@ int main(int argc, char *argv[])
    gettimeofday(&vc.start_tv, NULL);
 
    if (arg_headless) {
-      init_headless(&vc);
+      if (init_headless(&vc) == -1) {
+         fail("failed to initialize headless mode");
+      }
    } else {
-      init_wayland(&vc);
-      if (vc.wl.surface == NULL) {
-         init_xcb(&vc);
-         if (vc.xcb.window == XCB_NONE) {
-            init_kms(&vc);
-            if (vc.gbm_device == NULL) {
-               init_headless(&vc);
+      if (init_wayland(&vc) == -1) {
+         fprintf(stderr, "failed to initialize wayland, falling back "
+                         "to xcb\n");
+         if (init_xcb(&vc) == -1) {
+            fprintf(stderr, "failed to initialize xcb, falling back "
+                            "to kms\n");
+            if (init_kms(&vc) == -1) {
+               fprintf(stderr, "failed to initialize xcb, falling "
+                               "back to headless\n");
+               if (init_headless(&vc) == -1) {
+                  fail("failed to initialize headless mode");
+               }
             }
          }
       }
