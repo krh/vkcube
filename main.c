@@ -62,6 +62,8 @@
 
 #define printflike(a, b) __attribute__((format(printf, (a), (b))))
 
+static bool arg_headless = false;
+
 static void noreturn
 failv(const char *format, va_list args)
 {
@@ -1136,10 +1138,37 @@ mainloop_wayland(struct vkcube *vc)
 
 extern struct model cube_model;
 
+static void
+print_usage(FILE *f)
+{
+   const char *usage =
+      "usage: vkcube [-n]\n"
+      "\n"
+      "  -n  Don't initialize vt or kms, run headless.\n"
+      ;
+
+   fprintf(f, "%s", usage);
+}
+
+static void
+parse_args(int argc, char *argv[])
+{
+   if (argc <= 1)
+      return;
+
+   if (strcmp(argv[1], "-n") == 0) {
+      arg_headless = true;
+   } else {
+      print_usage(stderr);
+      exit(1);
+   }
+}
+
 int main(int argc, char *argv[])
 {
    struct vkcube vc;
-   bool headless;
+
+   parse_args(argc, argv);
 
    vc.model = cube_model;
    vc.gbm_device = NULL;
@@ -1149,17 +1178,7 @@ int main(int argc, char *argv[])
    vc.height = 768;
    gettimeofday(&vc.start_tv, NULL);
 
-   if (argc > 1) {
-      if (strcmp(argv[1], "-n") == 0) {
-         headless = true;
-      } else {
-         fprintf(stderr, "usage: vkcube [-n]\n\n"
-		 "  -n  Don't initialize vt or kms, run headless.\n");
-	 exit(1);
-      }
-   }
-
-   if (headless) {
+   if (arg_headless) {
       init_headless(&vc);
    } else {
       init_wayland(&vc);
