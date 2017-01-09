@@ -104,3 +104,9 @@ struct vkcube {
 void noreturn failv(const char *format, va_list args);
 void noreturn fail(const char *format, ...) printflike(1, 2) ;
 void fail_if(int cond, const char *format, ...) printflike(2, 3);
+
+static inline bool
+streq(const char *a, const char *b)
+{
+   return strcmp(a, b) == 0;
+}
