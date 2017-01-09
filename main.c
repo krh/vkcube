@@ -63,6 +63,7 @@
 #define printflike(a, b) __attribute__((format(printf, (a), (b))))
 
 static bool arg_headless = false;
+static const char *arg_out_file = "./cube.png";
 
 static void noreturn
 failv(const char *format, va_list args)
@@ -93,6 +94,18 @@ fail_if(int cond, const char *format, ...)
    va_start(args, format);
    failv(format, args);
    va_end(args);
+}
+
+static char * __attribute__((returns_nonnull))
+xstrdup(const char *s)
+{
+   char *dup = strdup(s);
+   if (!dup) {
+      fprintf(stderr, "out of memory\n");
+      abort();
+   }
+
+   return dup;
 }
 
 static void
@@ -323,7 +336,7 @@ write_png(const char *path, int32_t width, int32_t height, int32_t stride, void 
 static void
 write_buffer(struct vkcube *vc, struct vkcube_buffer *b)
 {
-   static const char filename[] = "cube.png";
+   const char *filename = arg_out_file;
    uint32_t mem_size = b->stride * vc->height;
    void *map;
 
@@ -1142,26 +1155,67 @@ static void
 print_usage(FILE *f)
 {
    const char *usage =
-      "usage: vkcube [-n]\n"
+      "usage: vkcube [-n] [-o <file>]\n"
       "\n"
-      "  -n  Don't initialize vt or kms, run headless.\n"
+      "  -n          Don't initialize vt or kms, run headless.\n"
+      "  -o <file>   Path to output image when running headless. Default\n"
+      "              is \"./cube.png\".\n"
       ;
 
    fprintf(f, "%s", usage);
 }
 
+static void noreturn printflike(1, 2)
+usage_error(const char *fmt, ...)
+{
+   va_list va;
+
+   fprintf(stderr, "usage error: ");
+   va_start(va, fmt);
+   vfprintf(stderr, fmt, va);
+   va_end(va);
+   fprintf(stderr, "\n\n");
+   print_usage(stderr);
+   exit(EXIT_FAILURE);
+}
+
 static void
 parse_args(int argc, char *argv[])
 {
-   if (argc <= 1)
-      return;
+   /* Setting '+' in the optstring is the same as setting POSIXLY_CORRECT in
+    * the enviroment. It tells getopt to stop parsing argv when it encounters
+    * the first non-option argument; it also prevents getopt from permuting
+    * argv during parsing.
+    *
+    * The initial ':' in the optstring makes getopt return ':' when an option
+    * is missing a required argument.
+    */
+   static const char *optstring = "+:no:";
 
-   if (strcmp(argv[1], "-n") == 0) {
-      arg_headless = true;
-   } else {
-      print_usage(stderr);
-      exit(1);
+   int opt;
+
+   while ((opt = getopt(argc, argv, optstring)) != -1) {
+      switch (opt) {
+      case 'n':
+         arg_headless = true;
+         break;
+      case 'o':
+         arg_out_file = xstrdup(optarg);
+         break;
+      case '?':
+         usage_error("invalid option '-%c'", optopt);
+         break;
+      case ':':
+         usage_error("option -%c requires an argument", optopt);
+         break;
+      default:
+         assert(!"unreachable");
+         break;
+      }
    }
+
+   if (optind != argc)
+      usage_error("trailing args");
 }
 
 int main(int argc, char *argv[])
