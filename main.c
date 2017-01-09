@@ -39,8 +39,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdarg.h>
-#include <stdnoreturn.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
@@ -60,12 +58,10 @@
 
 #include "common.h"
 
-#define printflike(a, b) __attribute__((format(printf, (a), (b))))
-
 static bool arg_headless = false;
 static const char *arg_out_file = "./cube.png";
 
-static void noreturn
+void noreturn
 failv(const char *format, va_list args)
 {
    vfprintf(stderr, format, args);
@@ -73,7 +69,7 @@ failv(const char *format, va_list args)
    exit(1);
 }
 
-static void printflike(1,2) noreturn
+void printflike(1,2) noreturn
 fail(const char *format, ...)
 {
    va_list args;
@@ -83,7 +79,7 @@ fail(const char *format, ...)
    va_end(args);
 }
 
-static void printflike(2, 3)
+void printflike(2, 3)
 fail_if(int cond, const char *format, ...)
 {
    va_list args;
