@@ -572,7 +572,7 @@ mainloop_vt(struct vkcube *vc)
    pfd[1].events = POLLIN;
 
    drmEventContext evctx = {
-      .version = DRM_EVENT_CONTEXT_VERSION,
+      .version = 2,
       .page_flip_handler = page_flip_handler,
    };
 
