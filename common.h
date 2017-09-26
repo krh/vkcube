@@ -3,6 +3,7 @@
 #include <sys/time.h>
 #include <stdbool.h>
 #include <string.h>
+#include <strings.h>
 
 #include <xf86drm.h>
 #include <xf86drmMode.h>

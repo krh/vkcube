@@ -317,22 +317,6 @@ init_cube(struct vkcube *vc)
    vc->normals_offset = vc->colors_offset + sizeof(vColors);
    uint32_t mem_size = vc->normals_offset + sizeof(vNormals);
 
-   vkAllocateMemory(vc->device,
-                    &(VkMemoryAllocateInfo) {
-                       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                       .allocationSize = mem_size,
-                       .memoryTypeIndex = 0,
-                    },
-                    NULL,
-                    &vc->mem);
-
-   r = vkMapMemory(vc->device, vc->mem, 0, mem_size, 0, &vc->map);
-   if (r != VK_SUCCESS)
-      fail("vkMapMemory failed");
-   memcpy(vc->map + vc->vertex_offset, vVertices, sizeof(vVertices));
-   memcpy(vc->map + vc->colors_offset, vColors, sizeof(vColors));
-   memcpy(vc->map + vc->normals_offset, vNormals, sizeof(vNormals));
-
    vkCreateBuffer(vc->device,
                   &(VkBufferCreateInfo) {
                      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -343,6 +327,25 @@ init_cube(struct vkcube *vc)
                   },
                   NULL,
                   &vc->buffer);
+
+   VkMemoryRequirements reqs;
+   vkGetBufferMemoryRequirements(vc->device, vc->buffer, &reqs);
+
+   vkAllocateMemory(vc->device,
+                    &(VkMemoryAllocateInfo) {
+                       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                       .allocationSize = mem_size,
+                       .memoryTypeIndex = ffs(reqs.memoryTypeBits) - 1,
+                    },
+                    NULL,
+                    &vc->mem);
+
+   r = vkMapMemory(vc->device, vc->mem, 0, mem_size, 0, &vc->map);
+   if (r != VK_SUCCESS)
+      fail("vkMapMemory failed");
+   memcpy(vc->map + vc->vertex_offset, vVertices, sizeof(vVertices));
+   memcpy(vc->map + vc->colors_offset, vColors, sizeof(vColors));
+   memcpy(vc->map + vc->normals_offset, vNormals, sizeof(vNormals));
 
    vkBindBufferMemory(vc->device, vc->buffer, vc->mem, 0);
 
