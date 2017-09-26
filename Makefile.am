@@ -1,6 +1,5 @@
 AM_CPPFLAGS =					\
-	$(MESA_CPPFLAGS)			\
-	-D_POSIX_C_SOURCE=200809L
+	$(MESA_CPPFLAGS)
 
 common_CFLAGS = -Wall -O0 -g3
 
