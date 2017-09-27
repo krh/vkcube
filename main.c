@@ -44,6 +44,7 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <sys/sysmacros.h>
 #include <sys/stat.h>
 #include <signal.h>
 #include <linux/kd.h>
