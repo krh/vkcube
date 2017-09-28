@@ -787,13 +787,20 @@ init_xcb(struct vkcube *vc)
 
    init_vk(vc, VK_KHR_XCB_SURFACE_EXTENSION_NAME);
 
-   if (!vkGetPhysicalDeviceXcbPresentationSupportKHR(vc->physical_device, 0,
-                                                     vc->xcb.conn,
-                                                     iter.data->root_visual)) {
+   PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR get_xcb_presentation_support =
+      (PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR)
+      vkGetInstanceProcAddr(vc->instance, "vkGetPhysicalDeviceXcbPresentationSupportKHR");
+   PFN_vkCreateXcbSurfaceKHR create_xcb_surface =
+      (PFN_vkCreateXcbSurfaceKHR)
+      vkGetInstanceProcAddr(vc->instance, "vkCreateXcbSurfaceKHR");
+
+   if (!get_xcb_presentation_support(vc->physical_device, 0,
+                                     vc->xcb.conn,
+                                     iter.data->root_visual)) {
       fail("Vulkan not supported on given X window");
    }
 
-   vkCreateXcbSurfaceKHR(vc->instance,
+   create_xcb_surface(vc->instance,
       &(VkXcbSurfaceCreateInfoKHR) {
          .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
          .connection = vc->xcb.conn,
