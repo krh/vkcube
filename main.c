@@ -399,7 +399,11 @@ init_headless(struct vkcube *vc)
    return 0;
 }
 
+#ifdef HAVE_VULKAN_INTEL_H
+
 /* KMS display code - render to kernel modesetting fb */
+
+#include <vulkan/vulkan_intel.h>
 
 static struct termios save_tio;
 
@@ -612,6 +616,21 @@ mainloop_vt(struct vkcube *vc)
       }
    }
 }
+
+#else
+
+static int
+init_kms(struct vkcube *vc)
+{
+   return -1;
+}
+
+static void
+mainloop_vt(struct vkcube *vc)
+{
+}
+
+#endif
 
 /* Swapchain-based code - shared between XCB and Wayland */
 

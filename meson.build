@@ -8,6 +8,12 @@ dep_wayland = dependency('wayland-client')
 dep_xcb = dependency('xcb')
 dep_vulkan = dependency('vulkan')
 
+cc = meson.get_compiler('c')
+defs = []
+if cc.has_header('vulkan/vulkan_intel.h')
+  defs += '-DHAVE_VULKAN_INTEL_H'
+endif
+
 # See https://github.com/google/shaderc
 prog_glslc = find_program('glslc', required : false)
 prog_cp = find_program('cp')
@@ -39,7 +45,7 @@ spirv_files = gen.process('vkcube.vert', 'vkcube.frag')
 vkcube = executable(
   'vkcube',
   [vkcube_files, spirv_files],
-  c_args : ['-Wall',
+  c_args : [ defs, '-Wall',
             '-Werror=implicit-function-declaration',
 	    '-Werror=missing-prototypes'],
   dependencies : [dep_libdrm, dep_gbm, dep_libpng, dep_wayland, dep_xcb, dep_vulkan],
