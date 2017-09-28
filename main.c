@@ -901,6 +901,8 @@ mainloop_xcb(struct vkcube *vc)
                 .pResults = &result,
              });
 
+         vkQueueWaitIdle(vc->queue);
+
          schedule_xcb_repaint(vc);
       }
 

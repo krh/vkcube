@@ -424,6 +424,8 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
 
    memcpy(vc->map, &ubo, sizeof(ubo));
 
+   vkResetCommandPool(vc->device, vc->cmd_pool, 0);
+
    VkCommandBuffer cmd_buffer;
    vkAllocateCommandBuffers(vc->device,
       &(VkCommandBufferAllocateInfo) {
@@ -511,11 +513,6 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
          .commandBufferCount = 1,
          .pCommandBuffers = &cmd_buffer,
       }, vc->fence);
-
-   vkWaitForFences(vc->device, 1, (VkFence[]) { vc->fence }, true, INT64_MAX);
-   vkResetFences(vc->device, 1, &vc->fence);
-
-   vkResetCommandPool(vc->device, vc->cmd_pool, 0);
 }
 
 struct model cube_model = {
