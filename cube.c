@@ -31,11 +31,11 @@ struct ubo {
    float normal[12];
 };
 
-static char vs_spirv_source[] = {
+static uint32_t vs_spirv_source[] = {
 #include "vkcube.vert.spv.h"
 };
 
-static char fs_spirv_source[] = {
+static uint32_t fs_spirv_source[] = {
 #include "vkcube.frag.spv.h"
 };
 

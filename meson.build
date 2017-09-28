@@ -9,8 +9,8 @@ dep_xcb = dependency('xcb')
 dep_vulkan = dependency('vulkan')
 
 # See https://github.com/google/shaderc
-prog_glslc = find_program('cp')
-prog_xxd = find_program('xxd')
+prog_glslc = find_program('glslc', required : false)
+prog_cp = find_program('cp')
 
 vkcube_files = files(
   'xdg-shell-unstable-v6-protocol.c',
@@ -21,22 +21,24 @@ vkcube_files = files(
   'esUtil.h'
 )
 
-spirv_files = [ 'vkcube.vert', 'vkcube.frag' ]
+if prog_glslc.found()
+  gen = generator(
+    prog_glslc,
+    output : '@PLAINNAME@',
+    arguments : [ '@INPUT@', '-mfmt=num', '-o', '@OUTPUT@.spv.h' ]
+  )
+else
+  gen = generator(
+    prog_cp,
+    output : '@PLAINNAME@',
+    arguments : [ '@INPUT@.spv.h.in', '@OUTPUT@.spv.h' ]
+  )
+endif
 
-gen = generator(
-  prog_glslc,
-  output : '@PLAINNAME@',
-  arguments : [ '@INPUT@', '@OUTPUT@' ]
-
-  # FIXME:
-  # | xxd -i > $@.tmp && mv $@.tmp $@
-
-)
-
-
+spirv_files = gen.process('vkcube.vert', 'vkcube.frag')
 vkcube = executable(
   'vkcube',
-  [vkcube_files, gen.process(spirv_files)],
+  [vkcube_files, spirv_files],
   c_args : ['-Wall',
             '-Werror=implicit-function-declaration',
 	    '-Werror=missing-prototypes'],
