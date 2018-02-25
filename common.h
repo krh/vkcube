@@ -78,6 +78,7 @@ struct vkcube {
 
    VkInstance instance;
    VkPhysicalDevice physical_device;
+   VkPhysicalDeviceMemoryProperties memory_properties;
    VkDevice device;
    VkRenderPass render_pass;
    VkQueue queue;
