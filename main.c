@@ -145,6 +145,8 @@ init_vk(struct vkcube *vc, const char *extension)
    printf("vendor id %04x, device name %s\n",
           properties.vendorID, properties.deviceName);
 
+   vkGetPhysicalDeviceMemoryProperties(vc->physical_device, &vc->memory_properties);
+
    vkGetPhysicalDeviceQueueFamilyProperties(vc->physical_device, &count, NULL);
    assert(count > 0);
    VkQueueFamilyProperties props[count];
