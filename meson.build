@@ -1,14 +1,16 @@
 project('vkcube', ['c'], version : '0.1', license : 'MIT',
         default_options : ['c_std=c11'])
 
+cc = meson.get_compiler('c')
+
 dep_libdrm = dependency('libdrm')
 dep_gbm = dependency('gbm')
 dep_libpng = dependency('libpng')
 dep_wayland = dependency('wayland-client')
 dep_xcb = dependency('xcb')
 dep_vulkan = dependency('vulkan')
+dep_m = cc.find_library('m', required : false)
 
-cc = meson.get_compiler('c')
 defs = []
 if cc.has_header('vulkan/vulkan_intel.h')
   defs += '-DHAVE_VULKAN_INTEL_H'
@@ -48,5 +50,5 @@ vkcube = executable(
   c_args : [ defs, '-Wall',
             '-Werror=implicit-function-declaration',
 	    '-Werror=missing-prototypes'],
-  dependencies : [dep_libdrm, dep_gbm, dep_libpng, dep_wayland, dep_xcb, dep_vulkan],
+  dependencies : [dep_libdrm, dep_gbm, dep_libpng, dep_wayland, dep_xcb, dep_vulkan, dep_m],
 )
