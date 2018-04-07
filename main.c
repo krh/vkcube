@@ -1194,6 +1194,8 @@ mainloop_wayland(struct vkcube *vc)
          });
       if (result != VK_SUCCESS)
          return;
+
+      vkQueueWaitIdle(vc->queue);
    }
 }
 
