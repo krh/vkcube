@@ -710,11 +710,24 @@ create_swapchain(struct vkcube *vc)
       }
    }
 
+   uint32_t minImageCount = 2;
+   if (minImageCount < surface_caps.minImageCount) {
+      if (surface_caps.minImageCount > MAX_NUM_IMAGES)
+          fail("surface_caps.minImageCount is too large (is: %d, max: %d)",
+               surface_caps.minImageCount, MAX_NUM_IMAGES);
+      minImageCount = surface_caps.minImageCount;
+   }
+
+   if (surface_caps.maxImageCount > 0 &&
+       minImageCount > surface_caps.maxImageCount) {
+      minImageCount = surface_caps.maxImageCount;
+   }
+
    vkCreateSwapchainKHR(vc->device,
       &(VkSwapchainCreateInfoKHR) {
          .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
          .surface = vc->surface,
-         .minImageCount = 2,
+         .minImageCount = minImageCount,
          .imageFormat = vc->image_format,
          .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
          .imageExtent = { vc->width, vc->height },
