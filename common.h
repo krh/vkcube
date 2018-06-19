@@ -35,6 +35,7 @@ struct vkcube_buffer {
    VkImageView view;
    VkFramebuffer framebuffer;
    VkFence fence;
+   VkCommandBuffer cmd_buffer;
 
    uint32_t fb;
    uint32_t stride;

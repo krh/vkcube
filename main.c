@@ -225,7 +225,7 @@ init_vk_objects(struct vkcube *vc)
                        &(const VkCommandPoolCreateInfo) {
                           .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
                           .queueFamilyIndex = 0,
-                          .flags = 0
+                          .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
                        },
                        NULL,
                        &vc->cmd_pool);
@@ -284,6 +284,15 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
                  },
                  NULL,
                  &b->fence);
+
+   vkAllocateCommandBuffers(vc->device,
+      &(VkCommandBufferAllocateInfo) {
+         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+         .commandPool = vc->cmd_pool,
+         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+         .commandBufferCount = 1,
+      },
+      &b->cmd_buffer);
 }
 
 /* Headless code - write one frame to png */
