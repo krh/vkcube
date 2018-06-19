@@ -439,6 +439,9 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
 
    memcpy(vc->map, &ubo, sizeof(ubo));
 
+   vkWaitForFences(vc->device, 1, &b->fence, VK_TRUE, UINT64_MAX);
+   vkResetFences(vc->device, 1, &b->fence);
+
    vkResetCommandPool(vc->device, vc->cmd_pool, 0);
 
    VkCommandBuffer cmd_buffer;
