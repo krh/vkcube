@@ -442,25 +442,13 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
    vkWaitForFences(vc->device, 1, &b->fence, VK_TRUE, UINT64_MAX);
    vkResetFences(vc->device, 1, &b->fence);
 
-   vkResetCommandPool(vc->device, vc->cmd_pool, 0);
-
-   VkCommandBuffer cmd_buffer;
-   vkAllocateCommandBuffers(vc->device,
-      &(VkCommandBufferAllocateInfo) {
-         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-         .commandPool = vc->cmd_pool,
-         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-         .commandBufferCount = 1,
-      },
-      &cmd_buffer);
-
-   vkBeginCommandBuffer(cmd_buffer,
+   vkBeginCommandBuffer(b->cmd_buffer,
                         &(VkCommandBufferBeginInfo) {
                            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                            .flags = 0
                         });
 
-   vkCmdBeginRenderPass(cmd_buffer,
+   vkCmdBeginRenderPass(b->cmd_buffer,
                         &(VkRenderPassBeginInfo) {
                            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                            .renderPass = vc->render_pass,
@@ -473,7 +461,7 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
                         },
                         VK_SUBPASS_CONTENTS_INLINE);
 
-   vkCmdBindVertexBuffers(cmd_buffer, 0, 3,
+   vkCmdBindVertexBuffers(b->cmd_buffer, 0, 3,
                           (VkBuffer[]) {
                              vc->buffer,
                              vc->buffer,
@@ -485,9 +473,9 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
                              vc->normals_offset
                            });
 
-   vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vc->pipeline);
+   vkCmdBindPipeline(b->cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vc->pipeline);
 
-   vkCmdBindDescriptorSets(cmd_buffer,
+   vkCmdBindDescriptorSets(b->cmd_buffer,
                            VK_PIPELINE_BIND_POINT_GRAPHICS,
                            vc->pipeline_layout,
                            0, 1,
@@ -501,24 +489,24 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
       .minDepth = 0,
       .maxDepth = 1,
    };
-   vkCmdSetViewport(cmd_buffer, 0, 1, &viewport);
+   vkCmdSetViewport(b->cmd_buffer, 0, 1, &viewport);
 
    const VkRect2D scissor = {
       .offset = { 0, 0 },
       .extent = { vc->width, vc->height },
    };
-   vkCmdSetScissor(cmd_buffer, 0, 1, &scissor);
+   vkCmdSetScissor(b->cmd_buffer, 0, 1, &scissor);
 
-   vkCmdDraw(cmd_buffer, 4, 1, 0, 0);
-   vkCmdDraw(cmd_buffer, 4, 1, 4, 0);
-   vkCmdDraw(cmd_buffer, 4, 1, 8, 0);
-   vkCmdDraw(cmd_buffer, 4, 1, 12, 0);
-   vkCmdDraw(cmd_buffer, 4, 1, 16, 0);
-   vkCmdDraw(cmd_buffer, 4, 1, 20, 0);
+   vkCmdDraw(b->cmd_buffer, 4, 1, 0, 0);
+   vkCmdDraw(b->cmd_buffer, 4, 1, 4, 0);
+   vkCmdDraw(b->cmd_buffer, 4, 1, 8, 0);
+   vkCmdDraw(b->cmd_buffer, 4, 1, 12, 0);
+   vkCmdDraw(b->cmd_buffer, 4, 1, 16, 0);
+   vkCmdDraw(b->cmd_buffer, 4, 1, 20, 0);
 
-   vkCmdEndRenderPass(cmd_buffer);
+   vkCmdEndRenderPass(b->cmd_buffer);
 
-   vkEndCommandBuffer(cmd_buffer);
+   vkEndCommandBuffer(b->cmd_buffer);
 
    vkQueueSubmit(vc->queue, 1,
       &(VkSubmitInfo) {
@@ -529,7 +517,7 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
          },
          .commandBufferCount = 1,
-         .pCommandBuffers = &cmd_buffer,
+         .pCommandBuffers = &b->cmd_buffer,
       }, b->fence);
 }
 
