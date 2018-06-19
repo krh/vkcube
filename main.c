@@ -726,6 +726,7 @@ create_swapchain(struct vkcube *vc)
    vkGetSwapchainImagesKHR(vc->device, vc->swap_chain,
                            &vc->image_count, swap_chain_images);
 
+   assert(vc->image_count <= MAX_NUM_IMAGES);
    for (uint32_t i = 0; i < vc->image_count; i++) {
       vc->buffers[i].image = swap_chain_images[i];
       init_buffer(vc, &vc->buffers[i]);
@@ -918,6 +919,7 @@ mainloop_xcb(struct vkcube *vc)
          vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
                                vc->semaphore, VK_NULL_HANDLE, &index);
 
+         assert(index <= MAX_NUM_IMAGES);
          vc->model.render(vc, &vc->buffers[index]);
 
          VkResult result;
@@ -1182,6 +1184,7 @@ mainloop_wayland(struct vkcube *vc)
       if (result != VK_SUCCESS)
          return;
 
+      assert(index <= MAX_NUM_IMAGES);
       vc->model.render(vc, &vc->buffers[index]);
 
       vkQueuePresentKHR(vc->queue,
