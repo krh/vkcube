@@ -210,8 +210,8 @@ init_vk_objects(struct vkcube *vc)
                   }
                },
                .pDepthStencilAttachment = NULL,
-               .preserveAttachmentCount = 1,
-               .pPreserveAttachments = (uint32_t []) { 0 },
+               .preserveAttachmentCount = 0,
+               .pPreserveAttachments = NULL,
             }
          },
          .dependencyCount = 0
