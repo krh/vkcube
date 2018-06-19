@@ -280,7 +280,7 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
    vkCreateFence(vc->device,
                  &(VkFenceCreateInfo) {
                     .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-                    .flags = 0
+                    .flags = VK_FENCE_CREATE_SIGNALED_BIT
                  },
                  NULL,
                  &b->fence);
