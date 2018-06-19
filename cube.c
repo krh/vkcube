@@ -527,7 +527,7 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
          },
          .commandBufferCount = 1,
          .pCommandBuffers = &cmd_buffer,
-      }, vc->fence);
+      }, b->fence);
 }
 
 struct model cube_model = {
