@@ -221,14 +221,6 @@ init_vk_objects(struct vkcube *vc)
 
    vc->model.init(vc);
 
-   vkCreateFence(vc->device,
-                 &(VkFenceCreateInfo) {
-                    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-                    .flags = 0
-                 },
-                 NULL,
-                 &vc->fence);
-
    vkCreateCommandPool(vc->device,
                        &(const VkCommandPoolCreateInfo) {
                           .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -284,6 +276,14 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
                        },
                        NULL,
                        &b->framebuffer);
+
+   vkCreateFence(vc->device,
+                 &(VkFenceCreateInfo) {
+                    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                    .flags = 0
+                 },
+                 NULL,
+                 &b->fence);
 }
 
 /* Headless code - write one frame to png */

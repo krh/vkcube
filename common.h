@@ -34,6 +34,8 @@ struct vkcube_buffer {
    VkImage image;
    VkImageView view;
    VkFramebuffer framebuffer;
+   VkFence fence;
+
    uint32_t fb;
    uint32_t stride;
 };
@@ -88,7 +90,6 @@ struct vkcube {
    VkBuffer buffer;
    VkDescriptorSet descriptor_set;
    VkSemaphore semaphore;
-   VkFence fence;
    VkCommandPool cmd_pool;
 
    void *map;
