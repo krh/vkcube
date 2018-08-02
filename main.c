@@ -938,7 +938,7 @@ mainloop_xcb(struct vkcube *vc)
             create_swapchain(vc);
 
          uint32_t index;
-         vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
+         vkAcquireNextImageKHR(vc->device, vc->swap_chain, UINT64_MAX,
                                vc->semaphore, VK_NULL_HANDLE, &index);
 
          assert(index <= MAX_NUM_IMAGES);
