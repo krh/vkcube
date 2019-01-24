@@ -938,13 +938,24 @@ mainloop_xcb(struct vkcube *vc)
             create_swapchain(vc);
 
          uint32_t index;
-         vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
-                               vc->semaphore, VK_NULL_HANDLE, &index);
+         VkResult result;
+         result = vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
+                                        vc->semaphore, VK_NULL_HANDLE, &index);
+         switch (result) {
+         case VK_SUCCESS:
+            break;
+         case VK_NOT_READY: /* try later */
+         case VK_TIMEOUT:   /* try later */
+         case VK_ERROR_OUT_OF_DATE_KHR: /* handled by native events */
+            schedule_xcb_repaint(vc);
+            continue;
+         default:
+            return;
+         }
 
          assert(index <= MAX_NUM_IMAGES);
          vc->model.render(vc, &vc->buffers[index]);
 
-         VkResult result;
          vkQueuePresentKHR(vc->queue,
              &(VkPresentInfoKHR) {
                 .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
