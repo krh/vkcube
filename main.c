@@ -873,6 +873,7 @@ schedule_xcb_repaint(struct vkcube *vc)
 
    xcb_send_event(vc->xcb.conn, 0, vc->xcb.window,
                   0, (char *) &client_message);
+   xcb_flush(vc->xcb.conn);
 }
 
 static void
