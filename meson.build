@@ -33,14 +33,14 @@ vkcube_files = files(
 if prog_glslc.found()
   gen = generator(
     prog_glslc,
-    output : '@PLAINNAME@',
-    arguments : [ '@INPUT@', '-mfmt=num', '-o', '@OUTPUT@.spv.h' ]
+    output : '@PLAINNAME@.spv.h',
+    arguments : [ '@INPUT@', '-mfmt=num', '-o', '@OUTPUT@' ]
   )
 else
   gen = generator(
     prog_cp,
-    output : '@PLAINNAME@',
-    arguments : [ '@INPUT@.spv.h.in', '@OUTPUT@.spv.h' ]
+    output : '@PLAINNAME@.spv.h',
+    arguments : [ '@INPUT@.spv.h.in', '@OUTPUT@' ]
   )
 endif
 
