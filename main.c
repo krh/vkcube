@@ -65,6 +65,7 @@ enum display_mode {
    DISPLAY_MODE_KMS,
    DISPLAY_MODE_WAYLAND,
    DISPLAY_MODE_XCB,
+   DISPLAY_MODE_KHR,
 };
 
 static enum display_mode display_mode = DISPLAY_MODE_AUTO;
@@ -807,7 +808,7 @@ init_xcb(struct vkcube *vc)
                      XCB_WINDOW_CLASS_INPUT_OUTPUT,
                      iter.data->root_visual,
                      XCB_CW_EVENT_MASK, window_values);
-   
+
    vc->xcb.atom_wm_protocols = get_atom(vc->xcb.conn, "WM_PROTOCOLS");
    vc->xcb.atom_wm_delete_window = get_atom(vc->xcb.conn, "WM_DELETE_WINDOW");
    xcb_change_property(vc->xcb.conn,
@@ -1236,6 +1237,240 @@ mainloop_wayland(struct vkcube *vc)
    }
 }
 
+static int display_idx = -1;
+static int display_mode_idx = -1;
+static int display_plane_idx = -1;
+
+// Return -1 on failure.
+static int
+init_khr(struct vkcube *vc)
+{
+   init_vk(vc, VK_KHR_DISPLAY_EXTENSION_NAME);
+   vc->image_format = VK_FORMAT_B8G8R8A8_SRGB;
+   init_vk_objects(vc);
+
+   /* */
+   uint32_t display_count = 0;
+   vkGetPhysicalDeviceDisplayPropertiesKHR(vc->physical_device,
+                                           &display_count, NULL);
+   if (!display_count) {
+      fprintf(stderr, "No available display\n");
+      return -1;
+   }
+
+   VkDisplayPropertiesKHR *displays =
+      (VkDisplayPropertiesKHR *) malloc(display_count * sizeof(*displays));
+   vkGetPhysicalDeviceDisplayPropertiesKHR(vc->physical_device,
+                                           &display_count,
+                                           displays);
+
+   if (display_idx < 0) {
+      for (uint32_t i = 0; i < display_count; i++) {
+         fprintf(stdout, "display [%i]:\n", i);
+         fprintf(stdout, "   name: %s\n", displays[i].displayName);
+         fprintf(stdout, "   physical dimensions: %ux%u\n",
+                 displays[i].physicalDimensions.width,
+                 displays[i].physicalDimensions.height);
+         fprintf(stdout, "   physical resolution: %ux%u\n",
+                 displays[i].physicalResolution.width,
+                 displays[i].physicalResolution.height);
+         fprintf(stdout, "   plane reorder: %s\n",
+                 displays[i].planeReorderPossible ? "yes" : "no");
+         fprintf(stdout, "   persistent content: %s\n",
+                 displays[i].persistentContent ? "yes" : "no");
+      }
+      free(displays);
+      return -1;
+   } else if (display_idx >= display_count) {
+      fprintf(stderr, "Invalid display index %i/%i\n",
+              display_idx, display_count);
+      free(displays);
+      return -1;
+   }
+
+   /* */
+   uint32_t mode_count = 0;
+   vkGetDisplayModePropertiesKHR(vc->physical_device,
+                                 displays[display_idx].display,
+                                 &mode_count, NULL);
+   if (!mode_count) {
+      fprintf(stderr, "Not mode available for display %i (%s)\n",
+              display_idx, displays[display_idx].displayName);
+      free(displays);
+      return -1;
+   }
+   VkDisplayModePropertiesKHR *modes =
+      (VkDisplayModePropertiesKHR *) malloc(mode_count * sizeof(*modes));
+   vkGetDisplayModePropertiesKHR(vc->physical_device,
+                                 displays[display_idx].display,
+                                 &mode_count, modes);
+   if (display_mode_idx < 0) {
+      fprintf(stdout,  "display [%i] (%s) modes:\n",
+              display_idx, displays[display_idx].displayName);
+      for (uint32_t i = 0; i < mode_count; i++) {
+         fprintf(stdout, "mode [%i]:\n", i);
+         fprintf(stdout, "   visible region: %ux%u\n",
+                 modes[i].parameters.visibleRegion.width,
+                 modes[i].parameters.visibleRegion.height);
+         fprintf(stdout, "   refresh rate: %u\n",
+                 modes[i].parameters.refreshRate);
+      }
+      free(displays);
+      free(modes);
+      return -1;
+   } else if (display_mode_idx >= mode_count) {
+      fprintf(stderr, "Invalid mode index %i/%i\n",
+              display_mode_idx, mode_count);
+      free(displays);
+      free(modes);
+      return -1;
+   }
+
+   /* */
+   uint32_t plane_count = 0;
+   vkGetPhysicalDeviceDisplayPlanePropertiesKHR(vc->physical_device,
+                                                &plane_count, NULL);
+   if (!plane_count) {
+      fprintf(stderr, "Not plane available for display %i (%s)\n",
+              display_idx, displays[display_idx].displayName);
+      free(displays);
+      free(modes);
+      return -1;
+   }
+
+   VkDisplayPlanePropertiesKHR *planes =
+      (VkDisplayPlanePropertiesKHR *) malloc(plane_count * sizeof(*planes));
+   vkGetPhysicalDeviceDisplayPlanePropertiesKHR(vc->physical_device,
+                                                &plane_count, planes);
+   if (display_plane_idx < 0) {
+      for (uint32_t i = 0; i < plane_count; i++) {
+         fprintf(stdout, "display [%i] (%s) plane [%i]\n",
+                 display_idx, displays[display_idx].displayName, i);
+         fprintf(stdout, "   current stack index: %u\n",
+                 planes[i].currentStackIndex);
+         fprintf(stdout, "   displays supported:");
+         uint32_t supported_display_count = 0;
+         vkGetDisplayPlaneSupportedDisplaysKHR(vc->physical_device,
+                                               i, &supported_display_count, NULL);
+         VkDisplayKHR *supported_displays =
+            (VkDisplayKHR *) malloc(supported_display_count * sizeof(*supported_displays));
+         vkGetDisplayPlaneSupportedDisplaysKHR(vc->physical_device,
+                                               i, &supported_display_count, supported_displays);
+         for (uint32_t j = 0; j < supported_display_count; j++) {
+            for (uint32_t k = 0; k < display_count; k++) {
+               if (displays[k].display == supported_displays[j]) {
+                  fprintf(stdout, " %u", k);
+                  break;
+               }
+            }
+         }
+         fprintf(stdout, "\n");
+
+         VkDisplayPlaneCapabilitiesKHR plane_caps;
+         vkGetDisplayPlaneCapabilitiesKHR(vc->physical_device,
+                                          modes[display_mode_idx].displayMode,
+                                          display_plane_idx,
+                                          &plane_caps);
+         fprintf(stdout, "   src pos: %ux%u -> %ux%u\n",
+                 plane_caps.minSrcPosition.x,
+                 plane_caps.minSrcPosition.y,
+                 plane_caps.maxSrcPosition.x,
+                 plane_caps.maxSrcPosition.y);
+         fprintf(stdout, "   src size: %ux%u -> %ux%u\n",
+                 plane_caps.minSrcExtent.width,
+                 plane_caps.minSrcExtent.height,
+                 plane_caps.maxSrcExtent.width,
+                 plane_caps.maxSrcExtent.height);
+         fprintf(stdout, "   dst pos: %ux%u -> %ux%u\n",
+                 plane_caps.minDstPosition.x,
+                 plane_caps.minDstPosition.y,
+                 plane_caps.maxDstPosition.x,
+                 plane_caps.maxDstPosition.y);
+      }
+      free(displays);
+      free(modes);
+      free(planes);
+      return -1;
+   } else if (display_plane_idx >= plane_count) {
+      fprintf(stderr, "Invalid plane index %i/%i\n",
+              display_plane_idx, plane_count);
+      free(displays);
+      free(modes);
+      free(planes);
+      return -1;
+   }
+
+   VkDisplayModeCreateInfoKHR display_mode_create_info = {
+      .sType = VK_STRUCTURE_TYPE_DISPLAY_MODE_CREATE_INFO_KHR,
+      .parameters = modes[display_mode_idx].parameters,
+   };
+   VkResult result =
+      vkCreateDisplayModeKHR(vc->physical_device,
+                             displays[display_idx].display,
+                             &display_mode_create_info,
+                             NULL, &vc->khr.display_mode);
+   if (result != VK_SUCCESS) {
+      fprintf(stderr, "Unable to create mode\n");
+      free(displays);
+      free(modes);
+      free(planes);
+      return -1;
+   }
+
+   VkDisplaySurfaceCreateInfoKHR display_plane_surface_create_info = {
+      .sType = VK_STRUCTURE_TYPE_DISPLAY_SURFACE_CREATE_INFO_KHR,
+      .displayMode = vc->khr.display_mode,
+      .planeIndex = display_plane_idx,
+      .imageExtent = modes[display_mode_idx].parameters.visibleRegion,
+   };
+   result =
+      vkCreateDisplayPlaneSurfaceKHR(vc->instance,
+                                     &display_plane_surface_create_info,
+                                     NULL,
+                                     &vc->surface);
+
+   vc->width = modes[display_mode_idx].parameters.visibleRegion.width;
+   vc->height = modes[display_mode_idx].parameters.visibleRegion.height;
+
+   init_vk_objects(vc);
+
+   create_swapchain(vc);
+
+   free(displays);
+   free(modes);
+   free(planes);
+
+   return 0;
+}
+
+static void
+mainloop_khr(struct vkcube *vc)
+{
+   while (1) {
+      uint32_t index;
+      VkResult result = vkAcquireNextImageKHR(vc->device, vc->swap_chain, UINT64_MAX,
+                                     vc->semaphore, VK_NULL_HANDLE, &index);
+      if (result != VK_SUCCESS)
+         return;
+
+      assert(index <= MAX_NUM_IMAGES);
+      vc->model.render(vc, &vc->buffers[index]);
+
+      vkQueuePresentKHR(vc->queue,
+         &(VkPresentInfoKHR) {
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .swapchainCount = 1,
+            .pSwapchains = (VkSwapchainKHR[]) { vc->swap_chain, },
+            .pImageIndices = (uint32_t[]) { index, },
+            .pResults = &result,
+         });
+      if (result != VK_SUCCESS)
+         return;
+
+      vkQueueWaitIdle(vc->queue);
+   }
+}
+
 extern struct model cube_model;
 
 static bool
@@ -1256,6 +1491,9 @@ display_mode_from_string(const char *s, enum display_mode *mode)
    } else if (streq(s, "xcb")) {
       *mode = DISPLAY_MODE_XCB;
       return true;
+   } else if (streq(s, "khr")) {
+      *mode = DISPLAY_MODE_KHR;
+      return true;
    } else {
       return false;
    }
@@ -1267,16 +1505,20 @@ print_usage(FILE *f)
    const char *usage =
       "usage: vkcube [-n] [-o <file>]\n"
       "\n"
-      "  -n          Don't initialize vt or kms, run headless. This option\n"
-      "              is equivalent to '-m headless'.\n"
+      "  -n                      Don't initialize vt or kms, run headless. This\n"
+      "                          option is equivalent to '-m headless'.\n"
       "\n"
-      "  -m <mode>   Choose display mode, where <mode> is one of\n"
-      "              \"auto\" (the default), \"headless\", \"kms\",\n"
-      "              \"wayland\", or \"xcb\". This option is incompatible\n"
-      "              with '-n'.\n"
+      "  -m <mode>               Choose display backend, where <mode> is one of\n"
+      "                          \"auto\" (the default), \"headless\", \"khr\",\n"
+      "                          \"kms\", \"wayland\", or \"xcb\". This option is\n"
+      "                          incompatible with '-n'.\n"
       "\n"
-      "  -o <file>   Path to output image when running headless. Default\n"
-      "              is \"./cube.png\".\n"
+      "  -k <display:mode:plane> Select KHR configuration with 3 number separated\n"
+      "                          by the column character. To display the item\n"
+      "                          corresponding to those number, just omit the number.\n"
+      "\n"
+      "  -o <file>               Path to output image when running headless.\n"
+      "                          Default is \"./cube.png\".\n"
       ;
 
    fprintf(f, "%s", usage);
@@ -1307,7 +1549,7 @@ parse_args(int argc, char *argv[])
     * The initial ':' in the optstring makes getopt return ':' when an option
     * is missing a required argument.
     */
-   static const char *optstring = "+:nm:o:";
+   static const char *optstring = "+:nm:o:k:";
 
    int opt;
    bool found_arg_headless = false;
@@ -1324,6 +1566,19 @@ parse_args(int argc, char *argv[])
          found_arg_headless = true;
          display_mode = DISPLAY_MODE_HEADLESS;
          break;
+      case 'k': {
+         char config[40], *saveptr, *t;
+         snprintf(config, sizeof(config), "%s", optarg);
+         if ((t = strtok_r(config, ":", &saveptr))) {
+            display_idx = atoi(t);
+            if ((t = strtok_r(NULL, ":", &saveptr))) {
+               display_mode_idx = atoi(t);
+               if ((t = strtok_r(NULL, ":", &saveptr)))
+                  display_plane_idx = atoi(t);
+            }
+         }
+         break;
+      }
       case 'o':
          arg_out_file = xstrdup(optarg);
          break;
@@ -1375,6 +1630,10 @@ init_display(struct vkcube *vc)
       if (init_headless(vc) == -1)
          fail("failed to initialize headless mode");
       break;
+   case DISPLAY_MODE_KHR:
+      if (init_khr(vc) == -1)
+         fail("fail to initialize khr");
+      break;
    case DISPLAY_MODE_KMS:
       if (init_kms(vc) == -1)
          fail("failed to initialize kms");
@@ -1405,6 +1664,9 @@ mainloop(struct vkcube *vc)
       break;
    case DISPLAY_MODE_KMS:
       mainloop_vt(vc);
+      break;
+   case DISPLAY_MODE_KHR:
+      mainloop_khr(vc);
       break;
    case DISPLAY_MODE_HEADLESS:
       vc->model.render(vc, &vc->buffers[0]);

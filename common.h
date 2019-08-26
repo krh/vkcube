@@ -73,6 +73,10 @@ struct vkcube {
       bool wait_for_configure;
    } wl;
 
+   struct {
+      VkDisplayModeKHR display_mode;
+   } khr;
+
    VkSwapchainKHR swap_chain;
 
    drmModeCrtc *crtc;
