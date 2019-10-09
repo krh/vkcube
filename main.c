@@ -979,12 +979,12 @@ mainloop_xcb(struct vkcube *vc)
 /* Wayland display code - render to Wayland window */
 
 static void
-handle_xdg_surface_configure(void *data, struct zxdg_surface_v6 *surface,
+handle_xdg_surface_configure(void *data, struct xdg_surface *surface,
                              uint32_t serial)
 {
    struct vkcube *vc = data;
 
-   zxdg_surface_v6_ack_configure(surface, serial);
+   xdg_surface_ack_configure(surface, serial);
 
    if (vc->wl.wait_for_configure) {
       // redraw
@@ -992,35 +992,35 @@ handle_xdg_surface_configure(void *data, struct zxdg_surface_v6 *surface,
    }
 }
 
-static const struct zxdg_surface_v6_listener xdg_surface_listener = {
+static const struct xdg_surface_listener xdg_surface_listener = {
    handle_xdg_surface_configure,
 };
 
 static void
-handle_xdg_toplevel_configure(void *data, struct zxdg_toplevel_v6 *toplevel,
+handle_xdg_toplevel_configure(void *data, struct xdg_toplevel *toplevel,
                               int32_t width, int32_t height,
                               struct wl_array *states)
 {
 }
 
 static void
-handle_xdg_toplevel_close(void *data, struct zxdg_toplevel_v6 *toplevel)
+handle_xdg_toplevel_close(void *data, struct xdg_toplevel *toplevel)
 {
 }
 
-static const struct zxdg_toplevel_v6_listener xdg_toplevel_listener = {
+static const struct xdg_toplevel_listener xdg_toplevel_listener = {
    handle_xdg_toplevel_configure,
    handle_xdg_toplevel_close,
 };
 
 static void
-handle_xdg_shell_ping(void *data, struct zxdg_shell_v6 *shell, uint32_t serial)
+handle_xdg_wm_base_ping(void *data, struct xdg_wm_base *shell, uint32_t serial)
 {
-   zxdg_shell_v6_pong(shell, serial);
+   xdg_wm_base_pong(shell, serial);
 }
 
-static const struct zxdg_shell_v6_listener xdg_shell_listener = {
-   handle_xdg_shell_ping,
+static const struct xdg_wm_base_listener xdg_wm_base_listener = {
+   handle_xdg_wm_base_ping,
 };
 
 static void
@@ -1102,9 +1102,9 @@ registry_handle_global(void *data, struct wl_registry *registry,
    if (strcmp(interface, "wl_compositor") == 0) {
       vc->wl.compositor = wl_registry_bind(registry, name,
                                            &wl_compositor_interface, 1);
-   } else if (strcmp(interface, "zxdg_shell_v6") == 0) {
-      vc->wl.shell = wl_registry_bind(registry, name, &zxdg_shell_v6_interface, 1);
-      zxdg_shell_v6_add_listener(vc->wl.shell, &xdg_shell_listener, vc);
+   } else if (strcmp(interface, "xdg_wm_base") == 0) {
+      vc->wl.shell = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
+      xdg_wm_base_add_listener(vc->wl.shell, &xdg_wm_base_listener, vc);
    } else if (strcmp(interface, "wl_seat") == 0) {
       vc->wl.seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
       wl_seat_add_listener(vc->wl.seat, &wl_seat_listener, vc);
@@ -1146,17 +1146,16 @@ init_wayland(struct vkcube *vc)
    vc->wl.surface = wl_compositor_create_surface(vc->wl.compositor);
 
    if (!vc->wl.shell)
-      fail("Compositor is missing unstable zxdg_shell_v6 protocol support");
+      fail("Compositor is missing xdg_wm_base protocol support");
 
-   vc->wl.xdg_surface = zxdg_shell_v6_get_xdg_surface(vc->wl.shell,
-                                                      vc->wl.surface);
+   vc->wl.xdg_surface = xdg_wm_base_get_xdg_surface(vc->wl.shell, vc->wl.surface);
 
-   zxdg_surface_v6_add_listener(vc->wl.xdg_surface, &xdg_surface_listener, vc);
+   xdg_surface_add_listener(vc->wl.xdg_surface, &xdg_surface_listener, vc);
 
-   vc->wl.xdg_toplevel = zxdg_surface_v6_get_toplevel(vc->wl.xdg_surface);
+   vc->wl.xdg_toplevel = xdg_surface_get_toplevel(vc->wl.xdg_surface);
 
-   zxdg_toplevel_v6_add_listener(vc->wl.xdg_toplevel, &xdg_toplevel_listener, vc);
-   zxdg_toplevel_v6_set_title(vc->wl.xdg_toplevel, "vkcube");
+   xdg_toplevel_add_listener(vc->wl.xdg_toplevel, &xdg_toplevel_listener, vc);
+   xdg_toplevel_set_title(vc->wl.xdg_toplevel, "vkcube");
 
    vc->wl.wait_for_configure = true;
    wl_surface_commit(vc->wl.surface);
