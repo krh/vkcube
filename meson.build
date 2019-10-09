@@ -22,7 +22,7 @@ prog_glslc = find_program('glslc', required : false)
 prog_cp = find_program('cp')
 
 vkcube_files = files(
-  'xdg-shell-unstable-v6-protocol.c',
+  'xdg-shell-protocol.c',
   'main.c',
   'common.h',
   'cube.c',
