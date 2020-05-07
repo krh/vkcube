@@ -8,7 +8,7 @@ dep_gbm = dependency('gbm')
 dep_libpng = dependency('libpng')
 dep_wayland = dependency('wayland-client')
 dep_xcb = dependency('xcb')
-dep_vulkan = dependency('vulkan')
+dep_vulkan = cc.find_library('vulkan', has_headers: ['vulkan/vulkan.h'])
 dep_m = cc.find_library('m', required : false)
 
 cc = meson.get_compiler('c')
