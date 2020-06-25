@@ -134,8 +134,8 @@ init_vk(struct vkcube *vc, const char *extension)
       &vc->instance);
 
    uint32_t count;
-   vkEnumeratePhysicalDevices(vc->instance, &count, NULL);
-   fail_if(count == 0, "No Vulkan devices found.\n");
+   VkResult res = vkEnumeratePhysicalDevices(vc->instance, &count, NULL);
+   fail_if(res != VK_SUCCESS || count == 0, "No Vulkan devices found.\n");
    VkPhysicalDevice pd[count];
    vkEnumeratePhysicalDevices(vc->instance, &count, pd);
    vc->physical_device = pd[0];
