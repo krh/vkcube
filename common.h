@@ -45,7 +45,7 @@ struct vkcube;
 
 struct model {
    void (*init)(struct vkcube *vc);
-   void (*render)(struct vkcube *vc, struct vkcube_buffer *b);
+   void (*render)(struct vkcube *vc, struct vkcube_buffer *b, bool wait_semaphore);
 };
 
 struct vkcube {

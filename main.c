@@ -619,7 +619,7 @@ mainloop_vt(struct vkcube *vc)
       if (pfd[1].revents & POLLIN) {
          drmHandleEvent(vc->fd, &evctx);
          b = &vc->buffers[vc->current & 1];
-         vc->model.render(vc, b);
+         vc->model.render(vc, b, false);
 
          ret = drmModePageFlip(vc->fd, vc->crtc->crtc_id, b->fb,
                                DRM_MODE_PAGE_FLIP_EVENT, NULL);
@@ -956,7 +956,7 @@ mainloop_xcb(struct vkcube *vc)
          }
 
          assert(index <= MAX_NUM_IMAGES);
-         vc->model.render(vc, &vc->buffers[index]);
+         vc->model.render(vc, &vc->buffers[index], true);
 
          vkQueuePresentKHR(vc->queue,
              &(VkPresentInfoKHR) {
@@ -1219,7 +1219,7 @@ mainloop_wayland(struct vkcube *vc)
          return;
 
       assert(index <= MAX_NUM_IMAGES);
-      vc->model.render(vc, &vc->buffers[index]);
+      vc->model.render(vc, &vc->buffers[index], true);
 
       vkQueuePresentKHR(vc->queue,
          &(VkPresentInfoKHR) {
@@ -1453,7 +1453,7 @@ mainloop_khr(struct vkcube *vc)
          return;
 
       assert(index <= MAX_NUM_IMAGES);
-      vc->model.render(vc, &vc->buffers[index]);
+      vc->model.render(vc, &vc->buffers[index], true);
 
       vkQueuePresentKHR(vc->queue,
          &(VkPresentInfoKHR) {
@@ -1668,7 +1668,7 @@ mainloop(struct vkcube *vc)
       mainloop_khr(vc);
       break;
    case DISPLAY_MODE_HEADLESS:
-      vc->model.render(vc, &vc->buffers[0]);
+      vc->model.render(vc, &vc->buffers[0], false);
       write_buffer(vc, &vc->buffers[0]);
       break;
    }

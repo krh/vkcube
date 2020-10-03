@@ -409,7 +409,7 @@ init_cube(struct vkcube *vc)
 }
 
 static void
-render_cube(struct vkcube *vc, struct vkcube_buffer *b)
+render_cube(struct vkcube *vc, struct vkcube_buffer *b, bool wait_semaphore)
 {
    struct ubo ubo;
    struct timeval tv;
@@ -511,7 +511,8 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
    vkQueueSubmit(vc->queue, 1,
       &(VkSubmitInfo) {
          .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-         .waitSemaphoreCount = 1,
+         /* headless mode does not signal vc->semaphore */
+         .waitSemaphoreCount = wait_semaphore ? 1 : 0,
          .pWaitSemaphores = &vc->semaphore,
          .pWaitDstStageMask = (VkPipelineStageFlags []) {
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
