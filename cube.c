@@ -511,7 +511,7 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b)
    vkQueueSubmit(vc->queue, 1,
       &(VkSubmitInfo) {
          .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-         .waitSemaphoreCount = 1,
+         .waitSemaphoreCount = vc->semaphore != VK_NULL_HANDLE ? 1 : 0,
          .pWaitSemaphores = &vc->semaphore,
          .pWaitDstStageMask = (VkPipelineStageFlags []) {
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,

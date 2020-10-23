@@ -176,7 +176,7 @@ init_vk(struct vkcube *vc, const char *extension)
 }
 
 static void
-init_vk_objects(struct vkcube *vc)
+init_vk_objects(struct vkcube *vc, bool create_semaphore)
 {
    vkCreateRenderPass(vc->device,
       &(VkRenderPassCreateInfo) {
@@ -231,12 +231,16 @@ init_vk_objects(struct vkcube *vc)
                        NULL,
                        &vc->cmd_pool);
 
-   vkCreateSemaphore(vc->device,
-                     &(VkSemaphoreCreateInfo) {
-                        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-                     },
-                     NULL,
-                     &vc->semaphore);
+   if (create_semaphore) {
+      vkCreateSemaphore(vc->device,
+                        &(VkSemaphoreCreateInfo) {
+                           .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                        },
+                        NULL,
+                        &vc->semaphore);
+   } else {
+      vc->semaphore = VK_NULL_HANDLE;
+   }
 }
 
 static void
@@ -370,7 +374,7 @@ init_headless(struct vkcube *vc)
 {
    init_vk(vc, NULL);
    vc->image_format = VK_FORMAT_B8G8R8A8_SRGB;
-   init_vk_objects(vc);
+   init_vk_objects(vc, false);
 
    struct vkcube_buffer *b = &vc->buffers[0];
 
@@ -528,7 +532,7 @@ init_kms(struct vkcube *vc)
 
    init_vk(vc, NULL);
    vc->image_format = VK_FORMAT_R8G8B8A8_SRGB;
-   init_vk_objects(vc);
+   init_vk_objects(vc, true);
 
    PFN_vkCreateDmaBufImageINTEL create_dma_buf_image =
       (PFN_vkCreateDmaBufImageINTEL)vkGetDeviceProcAddr(vc->device, "vkCreateDmaBufImageINTEL");
@@ -855,7 +859,7 @@ init_xcb(struct vkcube *vc)
 
    vc->image_format = choose_surface_format(vc);
 
-   init_vk_objects(vc);
+   init_vk_objects(vc, true);
 
    vc->image_count = 0;
 
@@ -1183,7 +1187,7 @@ init_wayland(struct vkcube *vc)
 
    vc->image_format = choose_surface_format(vc);
 
-   init_vk_objects(vc);
+   init_vk_objects(vc, true);
 
    create_swapchain(vc);
 
@@ -1246,7 +1250,7 @@ init_khr(struct vkcube *vc)
 {
    init_vk(vc, VK_KHR_DISPLAY_EXTENSION_NAME);
    vc->image_format = VK_FORMAT_B8G8R8A8_SRGB;
-   init_vk_objects(vc);
+   init_vk_objects(vc, true);
 
    /* */
    uint32_t display_count = 0;
@@ -1431,7 +1435,7 @@ init_khr(struct vkcube *vc)
    vc->width = modes[display_mode_idx].parameters.visibleRegion.width;
    vc->height = modes[display_mode_idx].parameters.visibleRegion.height;
 
-   init_vk_objects(vc);
+   init_vk_objects(vc, true);
 
    create_swapchain(vc);
 
