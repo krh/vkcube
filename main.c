@@ -1368,7 +1368,7 @@ init_khr(struct vkcube *vc)
          VkDisplayPlaneCapabilitiesKHR plane_caps;
          vkGetDisplayPlaneCapabilitiesKHR(vc->physical_device,
                                           modes[display_mode_idx].displayMode,
-                                          display_plane_idx,
+                                          i,
                                           &plane_caps);
          fprintf(stdout, "   src pos: %ux%u -> %ux%u\n",
                  plane_caps.minSrcPosition.x,
