@@ -70,6 +70,7 @@ enum display_mode {
 
 static enum display_mode display_mode = DISPLAY_MODE_AUTO;
 static const char *arg_out_file = "./cube.png";
+static bool protected_chain = false;
 
 void noreturn
 failv(const char *format, va_list args)
@@ -114,6 +115,19 @@ xstrdup(const char *s)
    return dup;
 }
 
+static int find_image_memory(struct vkcube *vc, unsigned allowed)
+{
+   VkMemoryPropertyFlags flags =
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+      (vc->protected ? VK_MEMORY_PROPERTY_PROTECTED_BIT : 0);
+
+    for (unsigned i = 0; (1u << i) <= allowed && i <= vc->memory_properties.memoryTypeCount; ++i) {
+        if ((allowed & (1u << i)) && (vc->memory_properties.memoryTypes[i].propertyFlags & flags))
+            return i;
+    }
+    return -1;
+}
+
 static void
 init_vk(struct vkcube *vc, const char *extension)
 {
@@ -141,6 +155,19 @@ init_vk(struct vkcube *vc, const char *extension)
    vc->physical_device = pd[0];
    printf("%d physical devices\n", count);
 
+   VkPhysicalDeviceProtectedMemoryFeatures protected_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES,
+   };
+   VkPhysicalDeviceFeatures2 features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+      .pNext = &protected_features,
+   };
+   vkGetPhysicalDeviceFeatures2(vc->physical_device, &features);
+
+   if (protected_chain && !protected_features.protectedMemory)
+      printf("Requested protected memory but not supported by device, dropping...\n");
+   vc->protected = protected_chain && protected_features.protectedMemory;
+
    VkPhysicalDeviceProperties properties;
    vkGetPhysicalDeviceProperties(vc->physical_device, &properties);
    printf("vendor id %04x, device name %s\n",
@@ -162,6 +189,7 @@ init_vk(struct vkcube *vc, const char *extension)
                         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                         .queueFamilyIndex = 0,
                         .queueCount = 1,
+                        .flags = vc->protected ? VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT : 0,
                         .pQueuePriorities = (float []) { 1.0f },
                      },
                      .enabledExtensionCount = 1,
@@ -226,7 +254,8 @@ init_vk_objects(struct vkcube *vc)
                        &(const VkCommandPoolCreateInfo) {
                           .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
                           .queueFamilyIndex = 0,
-                          .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
+                          .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT |
+                                   (vc->protected ? VK_COMMAND_POOL_CREATE_PROTECTED_BIT : 0)
                        },
                        NULL,
                        &vc->cmd_pool);
@@ -385,7 +414,7 @@ init_headless(struct vkcube *vc)
                     .samples = 1,
                     .tiling = VK_IMAGE_TILING_LINEAR,
                     .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                    .flags = 0,
+                    .flags = vc->protected ? VK_IMAGE_CREATE_PROTECTED_BIT : 0,
                  },
                  NULL,
                  &b->image);
@@ -397,7 +426,7 @@ init_headless(struct vkcube *vc)
                     &(VkMemoryAllocateInfo) {
                        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
                        .allocationSize = requirements.size,
-                       .memoryTypeIndex = 0
+                       .memoryTypeIndex = find_image_memory(vc, requirements.memoryTypeBits),
                     },
                     NULL,
                     &b->mem);
@@ -727,6 +756,7 @@ create_swapchain(struct vkcube *vc)
    vkCreateSwapchainKHR(vc->device,
       &(VkSwapchainCreateInfoKHR) {
          .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+         .flags = vc->protected ? VK_SWAPCHAIN_CREATE_PROTECTED_BIT_KHR : 0,
          .surface = vc->surface,
          .minImageCount = minImageCount,
          .imageFormat = vc->image_format,
@@ -1518,6 +1548,8 @@ print_usage(FILE *f)
       "\n"
       "  -o <file>               Path to output image when running headless.\n"
       "                          Default is \"./cube.png\".\n"
+      "\n"
+      "  -p                      Attempt to use protected content (encrypted).\n"
       ;
 
    fprintf(f, "%s", usage);
@@ -1548,7 +1580,7 @@ parse_args(int argc, char *argv[])
     * The initial ':' in the optstring makes getopt return ':' when an option
     * is missing a required argument.
     */
-   static const char *optstring = "+:nm:o:k:";
+   static const char *optstring = "+:nm:o:k:p";
 
    int opt;
    bool found_arg_headless = false;
@@ -1580,6 +1612,9 @@ parse_args(int argc, char *argv[])
       }
       case 'o':
          arg_out_file = xstrdup(optarg);
+         break;
+      case 'p':
+         protected_chain = true;
          break;
       case '?':
          usage_error("invalid option '-%c'", optopt);
@@ -1687,6 +1722,7 @@ int main(int argc, char *argv[])
    vc.wl.surface = NULL;
    vc.width = 1024;
    vc.height = 768;
+   vc.protected = protected_chain;
    gettimeofday(&vc.start_tv, NULL);
 
    init_display(&vc);
