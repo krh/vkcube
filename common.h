@@ -51,6 +51,8 @@ struct model {
 struct vkcube {
    struct model model;
 
+   bool protected;
+
    int fd;
    struct gbm_device *gbm_device;
 

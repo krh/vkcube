@@ -508,9 +508,15 @@ render_cube(struct vkcube *vc, struct vkcube_buffer *b, bool wait_semaphore)
 
    vkEndCommandBuffer(b->cmd_buffer);
 
+   VkProtectedSubmitInfo protected_info = {
+      .sType = VK_STRUCTURE_TYPE_PROTECTED_SUBMIT_INFO,
+      .protectedSubmit = vc->protected,
+   };
+
    vkQueueSubmit(vc->queue, 1,
       &(VkSubmitInfo) {
          .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+         .pNext = &protected_info,
          /* headless mode does not signal vc->semaphore */
          .waitSemaphoreCount = wait_semaphore ? 1 : 0,
          .pWaitSemaphores = &vc->semaphore,
