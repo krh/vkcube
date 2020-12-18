@@ -122,7 +122,7 @@ init_vk(struct vkcube *vc, const char *extension)
          .pApplicationInfo = &(VkApplicationInfo) {
             .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
             .pApplicationName = "vkcube",
-            .apiVersion = VK_MAKE_VERSION(1, 0, 2),
+            .apiVersion = VK_MAKE_VERSION(1, 1, 0),
          },
          .enabledExtensionCount = extension ? 2 : 0,
          .ppEnabledExtensionNames = (const char *[2]) {
