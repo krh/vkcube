@@ -1615,7 +1615,7 @@ init_display(struct vkcube *vc)
                             "to kms\n");
             display_mode = DISPLAY_MODE_KMS;
             if (init_kms(vc) == -1) {
-               fprintf(stderr, "failed to initialize xcb, falling "
+               fprintf(stderr, "failed to initialize kms, falling "
                                "back to headless\n");
                display_mode = DISPLAY_MODE_HEADLESS;
                if (init_headless(vc) == -1) {
