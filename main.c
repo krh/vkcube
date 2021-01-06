@@ -1669,6 +1669,7 @@ mainloop(struct vkcube *vc)
       break;
    case DISPLAY_MODE_HEADLESS:
       vc->model.render(vc, &vc->buffers[0], false);
+      vkQueueWaitIdle(vc->queue);
       write_buffer(vc, &vc->buffers[0]);
       break;
    }
