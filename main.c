@@ -1415,6 +1415,11 @@ init_khr(struct vkcube *vc)
                  plane_caps.minDstPosition.y,
                  plane_caps.maxDstPosition.x,
                  plane_caps.maxDstPosition.y);
+         fprintf(stdout, "   dst size: %ux%u -> %ux%u\n",
+                 plane_caps.minDstExtent.width,
+                 plane_caps.minDstExtent.height,
+                 plane_caps.maxDstExtent.width,
+                 plane_caps.maxDstExtent.height);
       }
       free(displays);
       free(modes);
