@@ -17,8 +17,7 @@ if cc.has_header('vulkan/vulkan_intel.h')
   defs += '-DHAVE_VULKAN_INTEL_H'
 endif
 
-# See https://github.com/google/shaderc
-prog_glslc = find_program('glslc', required : false)
+prog_glslang = find_program('glslangValidator', required : false)
 prog_cp = find_program('cp')
 
 vkcube_files = files(
@@ -30,11 +29,11 @@ vkcube_files = files(
   'esUtil.h'
 )
 
-if prog_glslc.found()
+if prog_glslang.found()
   gen = generator(
-    prog_glslc,
+    prog_glslang,
     output : '@PLAINNAME@.spv.h',
-    arguments : [ '@INPUT@', '-mfmt=num', '-o', '@OUTPUT@' ]
+    arguments : [ '@INPUT@', '-V', '-x', '-o', '@OUTPUT@' ]
   )
 else
   gen = generator(
