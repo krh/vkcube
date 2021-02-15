@@ -200,7 +200,12 @@ init_vk(struct vkcube *vc, const char *extension)
                   NULL,
                   &vc->device);
 
-   vkGetDeviceQueue(vc->device, 0, 0, &vc->queue);
+   vkGetDeviceQueue2(vc->device, &(VkDeviceQueueInfo2) {
+         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2,
+         .flags = vc->protected ? VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT : 0,
+         .queueFamilyIndex = 0,
+         .queueIndex = 0,
+      }, &vc->queue);
 }
 
 static void
