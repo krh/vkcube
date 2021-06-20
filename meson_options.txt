@@ -1,0 +1,2 @@
+option('x11', type : 'feature', value : 'auto')
+option('wayland', type : 'feature', value : 'auto')

@@ -788,6 +788,7 @@ create_swapchain(struct vkcube *vc)
 
 /* XCB display code - render to X window */
 
+#ifdef VKCUBE_USE_X11
 static xcb_atom_t
 get_atom(struct xcb_connection_t *conn, const char *name)
 {
@@ -1006,7 +1007,11 @@ mainloop_xcb(struct vkcube *vc)
    }
 }
 
+#endif
+
 /* Wayland display code - render to Wayland window */
+
+#ifdef VKCUBE_USE_WAYLAND
 
 static void
 handle_xdg_surface_configure(void *data, struct xdg_surface *surface,
@@ -1265,6 +1270,8 @@ mainloop_wayland(struct vkcube *vc)
       vkQueueWaitIdle(vc->queue);
    }
 }
+
+#endif
 
 static int display_idx = -1;
 static int display_mode_idx = -1;
@@ -1645,14 +1652,19 @@ init_display(struct vkcube *vc)
 {
    switch (display_mode) {
    case DISPLAY_MODE_AUTO:
+#ifdef VKCUBE_USE_WAYLAND
       display_mode = DISPLAY_MODE_WAYLAND;
       if (init_wayland(vc) == -1) {
          fprintf(stderr, "failed to initialize wayland, falling back "
                          "to xcb\n");
+#endif
+
+#ifdef VKCUBE_USE_X11
          display_mode = DISPLAY_MODE_XCB;
          if (init_xcb(vc) == -1) {
             fprintf(stderr, "failed to initialize xcb, falling back "
                             "to kms\n");
+#endif
             display_mode = DISPLAY_MODE_KMS;
             if (init_kms(vc) == -1) {
                fprintf(stderr, "failed to initialize kms, falling "
@@ -1662,8 +1674,13 @@ init_display(struct vkcube *vc)
                   fail("failed to initialize headless mode");
                }
             }
+#ifdef VKCUBE_USE_X11
          }
+#endif
+
+#ifdef VKCUBE_USE_WAYLAND
       }
+#endif
       break;
    case DISPLAY_MODE_HEADLESS:
       if (init_headless(vc) == -1)
@@ -1678,11 +1695,15 @@ init_display(struct vkcube *vc)
          fail("failed to initialize kms");
       break;
    case DISPLAY_MODE_WAYLAND:
+#ifdef VKCUBE_USE_WAYLAND
       if (init_wayland(vc) == -1)
+#endif
          fail("failed to initialize wayland");
       break;
    case DISPLAY_MODE_XCB:
+#ifdef VKCUBE_USE_X11
       if (init_xcb(vc) == -1)
+#endif
          fail("failed to initialize xcb");
       break;
    }
@@ -1696,10 +1717,14 @@ mainloop(struct vkcube *vc)
       assert(!"display mode is unset");
       break;
    case DISPLAY_MODE_WAYLAND:
+#ifdef VKCUBE_USE_WAYLAND
       mainloop_wayland(vc);
+#endif
       break;
    case DISPLAY_MODE_XCB:
+#ifdef VKCUBE_USE_X11
       mainloop_xcb(vc);
+#endif
       break;
    case DISPLAY_MODE_KMS:
       mainloop_vt(vc);
@@ -1723,8 +1748,12 @@ int main(int argc, char *argv[])
 
    vc.model = cube_model;
    vc.gbm_device = NULL;
+#ifdef VKCUBE_USE_X11
    vc.xcb.window = XCB_NONE;
+#endif
+#ifdef VKCUBE_USE_WAYLAND
    vc.wl.surface = NULL;
+#endif
    vc.width = 1024;
    vc.height = 768;
    vc.protected = protected_chain;
