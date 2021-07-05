@@ -331,6 +331,15 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
       &b->cmd_buffer);
 }
 
+static void
+fini_buffer(struct vkcube *vc, struct vkcube_buffer *b)
+{
+   vkFreeCommandBuffers(vc->device, vc->cmd_pool, 1, &b->cmd_buffer);
+   vkDestroyFence(vc->device, b->fence, NULL);
+   vkDestroyFramebuffer(vc->device, b->framebuffer, NULL);
+   vkDestroyImageView(vc->device, b->view, NULL);
+}
+
 /* Headless code - write one frame to png */
 
 static void
@@ -792,6 +801,18 @@ create_swapchain(struct vkcube *vc)
    }
 }
 
+static void
+recreate_swapchain(struct vkcube *vc)
+{
+   VkSwapchainKHR old_chain = vc->swap_chain;
+
+   for (uint32_t i = 0; i < vc->image_count; i++)
+      fini_buffer(vc, &vc->buffers[i]);
+
+   vkDestroySwapchainKHR(vc->device, old_chain, NULL);
+   create_swapchain(vc);
+}
+
 /* XCB display code - render to X window */
 
 static xcb_atom_t
@@ -1251,8 +1272,12 @@ mainloop_wayland(struct vkcube *vc)
 
       result = vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
                                      vc->semaphore, VK_NULL_HANDLE, &index);
-      if (result != VK_SUCCESS)
+      if (result == VK_SUBOPTIMAL_KHR) {
+         recreate_swapchain(vc);
+         continue;
+      } else if (result != VK_SUCCESS) {
          return;
+      }
 
       assert(index <= MAX_NUM_IMAGES);
       vc->model.render(vc, &vc->buffers[index], true);
