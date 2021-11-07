@@ -63,8 +63,12 @@ enum display_mode {
    DISPLAY_MODE_AUTO = 0,
    DISPLAY_MODE_HEADLESS,
    DISPLAY_MODE_KMS,
+#if defined(ENABLE_WAYLAND)
    DISPLAY_MODE_WAYLAND,
+#endif
+#if defined(ENABLE_XCB)
    DISPLAY_MODE_XCB,
+#endif
    DISPLAY_MODE_KHR,
 };
 
@@ -660,6 +664,7 @@ mainloop_vt(struct vkcube *vc)
 
 #else
 
+
 static int
 init_kms(struct vkcube *vc)
 {
@@ -674,6 +679,8 @@ mainloop_vt(struct vkcube *vc)
 #endif
 
 /* Swapchain-based code - shared between XCB and Wayland */
+
+#if defined(ENABLE_XCB) || defined(ENABLE_WAYLAND)
 
 static VkFormat
 choose_surface_format(struct vkcube *vc)
@@ -710,6 +717,8 @@ choose_surface_format(struct vkcube *vc)
 
    return format;
 }
+
+#endif
 
 static void
 create_swapchain(struct vkcube *vc)
@@ -787,6 +796,7 @@ create_swapchain(struct vkcube *vc)
 }
 
 /* XCB display code - render to X window */
+#if defined(ENABLE_XCB)
 
 static xcb_atom_t
 get_atom(struct xcb_connection_t *conn, const char *name)
@@ -1005,8 +1015,10 @@ mainloop_xcb(struct vkcube *vc)
       xcb_flush(vc->xcb.conn);
    }
 }
-
+#endif
 /* Wayland display code - render to Wayland window */
+
+#if defined(ENABLE_WAYLAND)
 
 static void
 handle_xdg_surface_configure(void *data, struct xdg_surface *surface,
@@ -1266,6 +1278,8 @@ mainloop_wayland(struct vkcube *vc)
    }
 }
 
+#endif
+
 static int display_idx = -1;
 static int display_mode_idx = -1;
 static int display_plane_idx = -1;
@@ -1519,12 +1533,16 @@ display_mode_from_string(const char *s, enum display_mode *mode)
    } else if (streq(s, "kms")) {
       *mode = DISPLAY_MODE_KMS;
       return true;
+#if defined(ENABLE_WAYLAND)
    } else if (streq(s, "wayland")) {
       *mode = DISPLAY_MODE_WAYLAND;
       return true;
+#endif
+#if defined(ENABLE_XCB)
    } else if (streq(s, "xcb")) {
       *mode = DISPLAY_MODE_XCB;
       return true;
+#endif
    } else if (streq(s, "khr")) {
       *mode = DISPLAY_MODE_KHR;
       return true;
@@ -1645,14 +1663,18 @@ init_display(struct vkcube *vc)
 {
    switch (display_mode) {
    case DISPLAY_MODE_AUTO:
+#if defined(ENABLE_WAYLAND)
       display_mode = DISPLAY_MODE_WAYLAND;
       if (init_wayland(vc) == -1) {
          fprintf(stderr, "failed to initialize wayland, falling back "
                          "to xcb\n");
+#endif
+#if defined(ENABLE_XCB)
          display_mode = DISPLAY_MODE_XCB;
          if (init_xcb(vc) == -1) {
             fprintf(stderr, "failed to initialize xcb, falling back "
                             "to kms\n");
+#endif
             display_mode = DISPLAY_MODE_KMS;
             if (init_kms(vc) == -1) {
                fprintf(stderr, "failed to initialize kms, falling "
@@ -1662,8 +1684,12 @@ init_display(struct vkcube *vc)
                   fail("failed to initialize headless mode");
                }
             }
+#if defined(ENABLE_XCB)
          }
+#endif
+#if defined(ENABLE_WAYLAND)
       }
+#endif
       break;
    case DISPLAY_MODE_HEADLESS:
       if (init_headless(vc) == -1)
@@ -1677,14 +1703,18 @@ init_display(struct vkcube *vc)
       if (init_kms(vc) == -1)
          fail("failed to initialize kms");
       break;
+#if defined(ENABLE_WAYLAND)
    case DISPLAY_MODE_WAYLAND:
       if (init_wayland(vc) == -1)
          fail("failed to initialize wayland");
       break;
+#endif
+#if defined(ENABLE_XCB)
    case DISPLAY_MODE_XCB:
       if (init_xcb(vc) == -1)
          fail("failed to initialize xcb");
       break;
+#endif
    }
 }
 
@@ -1695,12 +1725,16 @@ mainloop(struct vkcube *vc)
    case DISPLAY_MODE_AUTO:
       assert(!"display mode is unset");
       break;
+#if defined(ENABLE_WAYLAND)
    case DISPLAY_MODE_WAYLAND:
       mainloop_wayland(vc);
       break;
+#endif
+#if defined(ENABLE_XCB)
    case DISPLAY_MODE_XCB:
       mainloop_xcb(vc);
       break;
+#endif
    case DISPLAY_MODE_KMS:
       mainloop_vt(vc);
       break;
@@ -1723,8 +1757,12 @@ int main(int argc, char *argv[])
 
    vc.model = cube_model;
    vc.gbm_device = NULL;
+#if defined(ENABLE_XCB)
    vc.xcb.window = XCB_NONE;
+#endif
+#if defined(ENABLE_WAYLAND)
    vc.wl.surface = NULL;
+#endif
    vc.width = 1024;
    vc.height = 768;
    vc.protected = protected_chain;

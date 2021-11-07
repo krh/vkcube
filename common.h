@@ -10,13 +10,17 @@
 #include <drm_fourcc.h>
 #include <png.h>
 
+#if defined(ENABLE_XCB)
 #include <xcb/xcb.h>
+#define VK_USE_PLATFORM_XCB_KHR
+#endif
 
+#if defined(ENABLE_WAYLAND)
 #include <wayland-client.h>
 #include <xdg-shell-protocol.h>
-
-#define VK_USE_PLATFORM_XCB_KHR
 #define VK_USE_PLATFORM_WAYLAND_KHR
+#endif
+
 #define VK_PROTOTYPES
 #include <vulkan/vulkan.h>
 
@@ -56,13 +60,16 @@ struct vkcube {
    int fd;
    struct gbm_device *gbm_device;
 
+#if defined(ENABLE_XCB)
    struct {
       xcb_connection_t *conn;
       xcb_window_t window;
       xcb_atom_t atom_wm_protocols;
       xcb_atom_t atom_wm_delete_window;
    } xcb;
+#endif
 
+#if defined(ENABLE_WAYLAND)
    struct {
       struct wl_display *display;
       struct wl_compositor *compositor;
@@ -74,6 +81,7 @@ struct vkcube {
       struct xdg_toplevel *xdg_toplevel;
       bool wait_for_configure;
    } wl;
+#endif
 
    struct {
       VkDisplayModeKHR display_mode;
