@@ -63,8 +63,12 @@ enum display_mode {
    DISPLAY_MODE_AUTO = 0,
    DISPLAY_MODE_HEADLESS,
    DISPLAY_MODE_KMS,
+#if defined(ENABLE_WAYLAND)
    DISPLAY_MODE_WAYLAND,
+#endif
+#if defined(ENABLE_XCB)
    DISPLAY_MODE_XCB,
+#endif
    DISPLAY_MODE_KHR,
 };
 
@@ -330,15 +334,6 @@ init_buffer(struct vkcube *vc, struct vkcube_buffer *b)
          .commandBufferCount = 1,
       },
       &b->cmd_buffer);
-}
-
-static void
-fini_buffer(struct vkcube *vc, struct vkcube_buffer *b)
-{
-   vkFreeCommandBuffers(vc->device, vc->cmd_pool, 1, &b->cmd_buffer);
-   vkDestroyFence(vc->device, b->fence, NULL);
-   vkDestroyFramebuffer(vc->device, b->framebuffer, NULL);
-   vkDestroyImageView(vc->device, b->view, NULL);
 }
 
 /* Headless code - write one frame to png */
@@ -691,6 +686,8 @@ mainloop_vt(struct vkcube *vc)
 
 /* Swapchain-based code - shared between XCB and Wayland */
 
+#if defined(ENABLE_XCB) || defined(ENABLE_WAYLAND)
+
 static VkFormat
 choose_surface_format(struct vkcube *vc)
 {
@@ -726,6 +723,8 @@ choose_surface_format(struct vkcube *vc)
 
    return format;
 }
+
+#endif
 
 static void
 create_swapchain(struct vkcube *vc)
@@ -802,19 +801,8 @@ create_swapchain(struct vkcube *vc)
    }
 }
 
-static void
-recreate_swapchain(struct vkcube *vc)
-{
-   VkSwapchainKHR old_chain = vc->swap_chain;
-
-   for (uint32_t i = 0; i < vc->image_count; i++)
-      fini_buffer(vc, &vc->buffers[i]);
-
-   vkDestroySwapchainKHR(vc->device, old_chain, NULL);
-   create_swapchain(vc);
-}
-
 /* XCB display code - render to X window */
+#if defined(ENABLE_XCB)
 
 static xcb_atom_t
 get_atom(struct xcb_connection_t *conn, const char *name)
@@ -1033,8 +1021,10 @@ mainloop_xcb(struct vkcube *vc)
       xcb_flush(vc->xcb.conn);
    }
 }
-
+#endif
 /* Wayland display code - render to Wayland window */
+
+#if defined(ENABLE_WAYLAND)
 
 static void
 handle_xdg_surface_configure(void *data, struct xdg_surface *surface,
@@ -1249,6 +1239,27 @@ init_wayland(struct vkcube *vc)
 }
 
 static void
+fini_buffer(struct vkcube *vc, struct vkcube_buffer *b)
+{
+   vkFreeCommandBuffers(vc->device, vc->cmd_pool, 1, &b->cmd_buffer);
+   vkDestroyFence(vc->device, b->fence, NULL);
+   vkDestroyFramebuffer(vc->device, b->framebuffer, NULL);
+   vkDestroyImageView(vc->device, b->view, NULL);
+}
+
+static void
+recreate_swapchain(struct vkcube *vc)
+{
+   VkSwapchainKHR old_chain = vc->swap_chain;
+
+   for (uint32_t i = 0; i < vc->image_count; i++)
+      fini_buffer(vc, &vc->buffers[i]);
+
+   vkDestroySwapchainKHR(vc->device, old_chain, NULL);
+   create_swapchain(vc);
+}
+
+static void
 mainloop_wayland(struct vkcube *vc)
 {
    VkResult result = VK_SUCCESS;
@@ -1297,6 +1308,8 @@ mainloop_wayland(struct vkcube *vc)
       vkQueueWaitIdle(vc->queue);
    }
 }
+
+#endif
 
 static int display_idx = -1;
 static int display_mode_idx = -1;
@@ -1551,12 +1564,16 @@ display_mode_from_string(const char *s, enum display_mode *mode)
    } else if (streq(s, "kms")) {
       *mode = DISPLAY_MODE_KMS;
       return true;
+#if defined(ENABLE_WAYLAND)
    } else if (streq(s, "wayland")) {
       *mode = DISPLAY_MODE_WAYLAND;
       return true;
+#endif
+#if defined(ENABLE_XCB)
    } else if (streq(s, "xcb")) {
       *mode = DISPLAY_MODE_XCB;
       return true;
+#endif
    } else if (streq(s, "khr")) {
       *mode = DISPLAY_MODE_KHR;
       return true;
@@ -1687,14 +1704,18 @@ init_display(struct vkcube *vc)
 {
    switch (display_mode) {
    case DISPLAY_MODE_AUTO:
+#if defined(ENABLE_WAYLAND)
       display_mode = DISPLAY_MODE_WAYLAND;
       if (init_wayland(vc) == -1) {
          fprintf(stderr, "failed to initialize wayland, falling back "
                          "to xcb\n");
+#endif
+#if defined(ENABLE_XCB)
          display_mode = DISPLAY_MODE_XCB;
          if (init_xcb(vc) == -1) {
             fprintf(stderr, "failed to initialize xcb, falling back "
                             "to kms\n");
+#endif
             display_mode = DISPLAY_MODE_KMS;
             if (init_kms(vc) == -1) {
                fprintf(stderr, "failed to initialize kms, falling "
@@ -1704,8 +1725,12 @@ init_display(struct vkcube *vc)
                   fail("failed to initialize headless mode");
                }
             }
+#if defined(ENABLE_XCB)
          }
+#endif
+#if defined(ENABLE_WAYLAND)
       }
+#endif
       break;
    case DISPLAY_MODE_HEADLESS:
       if (init_headless(vc) == -1)
@@ -1719,14 +1744,18 @@ init_display(struct vkcube *vc)
       if (init_kms(vc) == -1)
          fail("failed to initialize kms");
       break;
+#if defined(ENABLE_WAYLAND)
    case DISPLAY_MODE_WAYLAND:
       if (init_wayland(vc) == -1)
          fail("failed to initialize wayland");
       break;
+#endif
+#if defined(ENABLE_XCB)
    case DISPLAY_MODE_XCB:
       if (init_xcb(vc) == -1)
          fail("failed to initialize xcb");
       break;
+#endif
    }
 }
 
@@ -1737,12 +1766,16 @@ mainloop(struct vkcube *vc)
    case DISPLAY_MODE_AUTO:
       assert(!"display mode is unset");
       break;
+#if defined(ENABLE_WAYLAND)
    case DISPLAY_MODE_WAYLAND:
       mainloop_wayland(vc);
       break;
+#endif
+#if defined(ENABLE_XCB)
    case DISPLAY_MODE_XCB:
       mainloop_xcb(vc);
       break;
+#endif
    case DISPLAY_MODE_KMS:
       mainloop_vt(vc);
       break;
@@ -1765,8 +1798,12 @@ int main(int argc, char *argv[])
 
    vc.model = cube_model;
    vc.gbm_device = NULL;
+#if defined(ENABLE_XCB)
    vc.xcb.window = XCB_NONE;
+#endif
+#if defined(ENABLE_WAYLAND)
    vc.wl.surface = NULL;
+#endif
    vc.width = width;
    vc.height = height;
    vc.protected = protected_chain;
