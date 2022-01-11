@@ -748,10 +748,10 @@ create_swapchain(struct vkcube *vc)
    vkGetPhysicalDeviceSurfacePresentModesKHR(vc->physical_device, vc->surface,
                                              &count, present_modes);
    int i;
-   VkPresentModeKHR present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+   VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
    for (i = 0; i < count; i++) {
-      if (present_modes[i] == VK_PRESENT_MODE_FIFO_KHR) {
-         present_mode = VK_PRESENT_MODE_FIFO_KHR;
+      if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+         present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
          break;
       }
    }
