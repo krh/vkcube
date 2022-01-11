@@ -26,7 +26,7 @@
 
 #define printflike(a, b) __attribute__((format(printf, (a), (b))))
 
-#define MAX_NUM_IMAGES 4
+#define MAX_NUM_IMAGES 5
 
 struct vkcube_buffer {
    struct gbm_bo *gbm_bo;
