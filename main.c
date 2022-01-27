@@ -700,11 +700,14 @@ choose_surface_format(struct vkcube *vc)
       switch (formats[i].format) {
       case VK_FORMAT_R8G8B8A8_SRGB:
       case VK_FORMAT_B8G8R8A8_SRGB:
+      case VK_FORMAT_R8G8B8A8_UNORM:
+      case VK_FORMAT_B8G8R8A8_UNORM:
          /* These formats are all fine */
          format = formats[i].format;
          break;
       case VK_FORMAT_R8G8B8_SRGB:
       case VK_FORMAT_B8G8R8_SRGB:
+      case VK_FORMAT_R8G8B8_UNORM:
       case VK_FORMAT_R5G6B5_UNORM_PACK16:
       case VK_FORMAT_B5G6R5_UNORM_PACK16:
          /* We would like to support these but they don't seem to work. */
