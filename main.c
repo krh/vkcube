@@ -132,7 +132,7 @@ static int find_image_memory(struct vkcube *vc, unsigned allowed)
 static void
 init_vk(struct vkcube *vc, const char *extension)
 {
-   vkCreateInstance(&(VkInstanceCreateInfo) {
+   VkResult res = vkCreateInstance(&(VkInstanceCreateInfo) {
          .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
          .pApplicationInfo = &(VkApplicationInfo) {
             .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -147,9 +147,10 @@ init_vk(struct vkcube *vc, const char *extension)
       },
       NULL,
       &vc->instance);
+   fail_if(res != VK_SUCCESS, "Failed to create Vulkan instance.\n");
 
    uint32_t count;
-   VkResult res = vkEnumeratePhysicalDevices(vc->instance, &count, NULL);
+   res = vkEnumeratePhysicalDevices(vc->instance, &count, NULL);
    fail_if(res != VK_SUCCESS || count == 0, "No Vulkan devices found.\n");
    VkPhysicalDevice pd[count];
    vkEnumeratePhysicalDevices(vc->instance, &count, pd);
