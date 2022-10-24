@@ -73,6 +73,7 @@ enum display_mode {
 };
 
 static enum display_mode display_mode = DISPLAY_MODE_AUTO;
+static uint32_t width = 1024, height = 768;
 static const char *arg_out_file = "./cube.png";
 static bool protected_chain = false;
 
@@ -204,7 +205,12 @@ init_vk(struct vkcube *vc, const char *extension)
                   NULL,
                   &vc->device);
 
-   vkGetDeviceQueue(vc->device, 0, 0, &vc->queue);
+   vkGetDeviceQueue2(vc->device, &(VkDeviceQueueInfo2) {
+         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2,
+         .flags = vc->protected ? VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT : 0,
+         .queueFamilyIndex = 0,
+         .queueIndex = 0,
+      }, &vc->queue);
 }
 
 static void
@@ -1568,6 +1574,10 @@ print_usage(FILE *f)
       "                          \"kms\", \"wayland\", or \"xcb\". This option is\n"
       "                          incompatible with '-n'.\n"
       "\n"
+      "  -w                      Specify width.\n"
+      "\n"
+      "  -h                      Specify height.\n"
+      "\n"
       "  -k <display:mode:plane> Select KHR configuration with 3 number separated\n"
       "                          by the column character. To display the item\n"
       "                          corresponding to those number, just omit the number.\n"
@@ -1606,7 +1616,7 @@ parse_args(int argc, char *argv[])
     * The initial ':' in the optstring makes getopt return ':' when an option
     * is missing a required argument.
     */
-   static const char *optstring = "+:nm:o:k:p";
+   static const char *optstring = "+:nm:w:h:o:k:p";
 
    int opt;
    bool found_arg_headless = false;
@@ -1622,6 +1632,12 @@ parse_args(int argc, char *argv[])
       case 'n':
          found_arg_headless = true;
          display_mode = DISPLAY_MODE_HEADLESS;
+         break;
+      case 'w':
+         width = atoi(optarg);
+         break;
+      case 'h':
+         height = atoi(optarg);
          break;
       case 'k': {
          char config[40], *saveptr, *t;
@@ -1766,8 +1782,8 @@ int main(int argc, char *argv[])
 #if defined(ENABLE_WAYLAND)
    vc.wl.surface = NULL;
 #endif
-   vc.width = 1024;
-   vc.height = 768;
+   vc.width = width;
+   vc.height = height;
    vc.protected = protected_chain;
    gettimeofday(&vc.start_tv, NULL);
 
