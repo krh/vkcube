@@ -18,7 +18,7 @@ if cc.has_header('vulkan/vulkan_intel.h', dependencies: dep_vulkan)
   defs += '-DHAVE_VULKAN_INTEL_H'
 endif
 
-if dep_wayland_client.found() and get_option('wayland') == 'true'
+if dep_wayland_client.found() and get_option('wayland') != 'false'
   message('wayland enabled')
   defs += '-DENABLE_WAYLAND'
 
@@ -44,7 +44,7 @@ else
   wayland_protocol_files = []
 endif
 
-if dep_xcb.found() and get_option('xcb') == 'true'
+if dep_xcb.found() and get_option('xcb') != 'false'
   message('xcb enabled')
   defs += '-DENABLE_XCB'
 endif
