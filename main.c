@@ -1287,7 +1287,8 @@ mainloop_wayland(struct vkcube *vc)
 
       result = vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
                                      vc->semaphore, VK_NULL_HANDLE, &index);
-      if (result == VK_SUBOPTIMAL_KHR) {
+      if (result == VK_SUBOPTIMAL_KHR ||
+          result == VK_ERROR_OUT_OF_DATE_KHR) {
          recreate_swapchain(vc);
          continue;
       } else if (result == VK_NOT_READY ||
