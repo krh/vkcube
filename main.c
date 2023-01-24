@@ -1290,6 +1290,9 @@ mainloop_wayland(struct vkcube *vc)
       if (result == VK_SUBOPTIMAL_KHR) {
          recreate_swapchain(vc);
          continue;
+      } else if (result == VK_NOT_READY ||
+                 result == VK_TIMEOUT) {
+         continue;
       } else if (result != VK_SUCCESS) {
          return;
       }
