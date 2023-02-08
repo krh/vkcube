@@ -1287,10 +1287,16 @@ mainloop_wayland(struct vkcube *vc)
 
       result = vkAcquireNextImageKHR(vc->device, vc->swap_chain, 60,
                                      vc->semaphore, VK_NULL_HANDLE, &index);
-      if (result == VK_SUBOPTIMAL_KHR) {
+      switch (result) {
+      case VK_SUCCESS:
+         break;
+      case VK_NOT_READY: /* try later */
+      case VK_TIMEOUT:   /* try later */
+         continue;
+      case VK_SUBOPTIMAL_KHR:
          recreate_swapchain(vc);
          continue;
-      } else if (result != VK_SUCCESS) {
+      default:
          return;
       }
 
