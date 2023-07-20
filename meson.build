@@ -14,9 +14,6 @@ dep_wayland_protocols = dependency('wayland-protocols', version : '>= 1.12', req
 dep_xcb = dependency('xcb', required : get_option('xcb') == 'true')
 
 defs = []
-if cc.has_header('vulkan/vulkan_intel.h', dependencies: dep_vulkan)
-  defs += '-DHAVE_VULKAN_INTEL_H'
-endif
 
 if dep_wayland_client.found() and get_option('wayland') != 'false'
   message('wayland enabled')
