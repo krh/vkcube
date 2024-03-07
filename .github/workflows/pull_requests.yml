@@ -1,0 +1,21 @@
+name: Verify Pull Request
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches:
+      - master
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+
+      - name: Build project action
+        uses: ./.github/actions/project_build

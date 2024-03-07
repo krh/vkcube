@@ -1,0 +1,35 @@
+name: "Build with Meson and Ninja"
+description: "Checks out code, sets up Python, and builds using Meson and Ninja"
+inputs:
+  python-version:
+    description: "Python version to use"
+    required: true
+    default: "3.x"
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install libraries
+      # run: apk add --no-cache vulkan-loader-dev libdrm-dev libpng-dev ninja-build meson
+      run: sudo apt-get install libvulkan-dev libdrm-dev libpng-dev ninja-build
+      shell: bash
+
+    - name: Install Meson and Ninja
+      run: pip install meson
+      shell: bash
+
+    - name: Configure build with Meson on linux
+      env:
+        # Customize the meson build type here (release, debug, debugoptimized, etc.)
+        BUILD_TYPE: release
+      run: |
+        meson setup builddir --buildtype=${{env.BUILD_TYPE}}
+      shell: bash
+
+    - name: Compile
+      run: meson compile -C builddir
+      shell: bash
