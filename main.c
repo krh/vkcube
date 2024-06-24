@@ -674,6 +674,7 @@ mainloop_vt(struct vkcube *vc)
 static int
 init_kms(struct vkcube *vc)
 {
+   fprintf(stderr, "vkcube not built with KMS support (no vulkan_intel.h)\n");
    return -1;
 }
 
