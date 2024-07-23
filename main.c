@@ -187,22 +187,26 @@ init_vk(struct vkcube *vc, const char *extension)
    vkGetPhysicalDeviceQueueFamilyProperties(vc->physical_device, &count, props);
    assert(props[0].queueFlags & VK_QUEUE_GRAPHICS_BIT);
 
+   VkDeviceCreateInfo device_create_info = {
+      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+      .queueCreateInfoCount = 1,
+      .pQueueCreateInfos = &(VkDeviceQueueCreateInfo) {
+         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+         .queueFamilyIndex = 0,
+         .queueCount = 1,
+         .flags = vc->protected ? VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT : 0,
+         .pQueuePriorities = (float []) { 1.0f },
+      },
+      .enabledExtensionCount = 1,
+      .ppEnabledExtensionNames = (const char * const []) {
+         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+      },
+   };
+   if (vc->protected)
+      device_create_info.pNext = &protected_features;
+
    vkCreateDevice(vc->physical_device,
-                  &(VkDeviceCreateInfo) {
-                     .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-                     .queueCreateInfoCount = 1,
-                     .pQueueCreateInfos = &(VkDeviceQueueCreateInfo) {
-                        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-                        .queueFamilyIndex = 0,
-                        .queueCount = 1,
-                        .flags = vc->protected ? VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT : 0,
-                        .pQueuePriorities = (float []) { 1.0f },
-                     },
-                     .enabledExtensionCount = 1,
-                     .ppEnabledExtensionNames = (const char * const []) {
-                        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                     },
-                  },
+                  &device_create_info,
                   NULL,
                   &vc->device);
 
