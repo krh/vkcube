@@ -3,11 +3,14 @@
 #include <sys/time.h>
 #include <stdbool.h>
 #include <string.h>
-#include <strings.h>
 
+#if defined(HAVE_VULKAN_INTEL_H)
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
+#include <gbm.h>
+#endif
+
 #include <png.h>
 
 #if defined(ENABLE_XCB)
@@ -24,8 +27,6 @@
 #define VK_PROTOTYPES
 #include <vulkan/vulkan.h>
 
-#include <gbm.h>
-
 #include "esUtil.h"
 
 #define printflike(a, b) __attribute__((format(printf, (a), (b))))
@@ -33,7 +34,10 @@
 #define MAX_NUM_IMAGES 5
 
 struct vkcube_buffer {
+#if defined(HAVE_VULKAN_INTEL_H)
    struct gbm_bo *gbm_bo;
+   uint32_t fb;
+#endif
    VkDeviceMemory mem;
    VkImage image;
    VkImageView view;
@@ -41,7 +45,6 @@ struct vkcube_buffer {
    VkFence fence;
    VkCommandBuffer cmd_buffer;
 
-   uint32_t fb;
    uint32_t stride;
 };
 
@@ -57,8 +60,12 @@ struct vkcube {
 
    bool protected;
 
+#if defined(HAVE_VULKAN_INTEL_H)
    int fd;
+   drmModeCrtc *crtc;
+   drmModeConnector *connector;
    struct gbm_device *gbm_device;
+#endif
 
 #if defined(ENABLE_XCB)
    struct {
@@ -89,8 +96,6 @@ struct vkcube {
 
    VkSwapchainKHR swap_chain;
 
-   drmModeCrtc *crtc;
-   drmModeConnector *connector;
    uint32_t width, height;
 
    VkInstance instance;

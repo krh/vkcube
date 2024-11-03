@@ -37,32 +37,37 @@
 
 #define _DEFAULT_SOURCE /* for major() */
 
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <errno.h>
-#include <sys/ioctl.h>
-#include <sys/types.h>
-#include <sys/sysmacros.h>
-#include <sys/stat.h>
-#include <signal.h>
-#include <linux/kd.h>
-#include <linux/vt.h>
-#include <linux/major.h>
-#include <termios.h>
-#include <poll.h>
-#include <math.h>
-#include <assert.h>
-#include <sys/mman.h>
+#if defined(ENABLE_WAYLAND)
 #include <linux/input.h>
+#endif
+#if defined(ENABLE_WAYLAND) || defined(HAVE_VULKAN_INTEL_H)
+#include <errno.h>
+#include <poll.h>
+#endif
+#if defined(HAVE_VULKAN_INTEL_H)
+#include <fcntl.h>
+#include <linux/kd.h>
+#include <linux/major.h>
+#include <linux/vt.h>
+#include <signal.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <termios.h>
+#include <vulkan/vulkan_intel.h>
+#endif
 
 #include "common.h"
 
 enum display_mode {
    DISPLAY_MODE_AUTO = 0,
    DISPLAY_MODE_HEADLESS,
+#if defined(HAVE_VULKAN_INTEL_H)
    DISPLAY_MODE_KMS,
+#endif
 #if defined(ENABLE_WAYLAND)
    DISPLAY_MODE_WAYLAND,
 #endif
@@ -451,11 +456,9 @@ init_headless(struct vkcube *vc)
    return 0;
 }
 
-#ifdef HAVE_VULKAN_INTEL_H
+#if defined(HAVE_VULKAN_INTEL_H)
 
 /* KMS display code - render to kernel modesetting fb */
-
-#include <vulkan/vulkan_intel.h>
 
 static struct termios save_tio;
 
@@ -669,24 +672,11 @@ mainloop_vt(struct vkcube *vc)
    }
 }
 
-#else
-
-static int
-init_kms(struct vkcube *vc)
-{
-   return -1;
-}
-
-static void
-mainloop_vt(struct vkcube *vc)
-{
-}
-
 #endif
 
-/* Swapchain-based code - shared between XCB and Wayland */
-
 #if defined(ENABLE_XCB) || defined(ENABLE_WAYLAND)
+
+/* Swapchain-based code - shared between XCB and Wayland */
 
 static VkFormat
 choose_surface_format(struct vkcube *vc)
@@ -804,8 +794,9 @@ create_swapchain(struct vkcube *vc)
    }
 }
 
-/* XCB display code - render to X window */
 #if defined(ENABLE_XCB)
+
+/* XCB display code - render to X window */
 
 static xcb_atom_t
 get_atom(struct xcb_connection_t *conn, const char *name)
@@ -1025,9 +1016,10 @@ mainloop_xcb(struct vkcube *vc)
    }
 }
 #endif
-/* Wayland display code - render to Wayland window */
 
 #if defined(ENABLE_WAYLAND)
+
+/* Wayland display code - render to Wayland window */
 
 static void
 handle_xdg_surface_configure(void *data, struct xdg_surface *surface,
@@ -1568,9 +1560,11 @@ display_mode_from_string(const char *s, enum display_mode *mode)
    } else if (streq(s, "headless")) {
       *mode = DISPLAY_MODE_HEADLESS;
       return true;
+#if defined(HAVE_VULKAN_INTEL_H)
    } else if (streq(s, "kms")) {
       *mode = DISPLAY_MODE_KMS;
       return true;
+#endif
 #if defined(ENABLE_WAYLAND)
    } else if (streq(s, "wayland")) {
       *mode = DISPLAY_MODE_WAYLAND;
@@ -1715,23 +1709,33 @@ init_display(struct vkcube *vc)
       display_mode = DISPLAY_MODE_WAYLAND;
       if (init_wayland(vc) == -1) {
          fprintf(stderr, "failed to initialize wayland, falling back "
-                         "to xcb\n");
 #endif
 #if defined(ENABLE_XCB)
+#if defined(ENABLE_WAYLAND)
+                         "to xcb\n");
+#endif
          display_mode = DISPLAY_MODE_XCB;
          if (init_xcb(vc) == -1) {
             fprintf(stderr, "failed to initialize xcb, falling back "
+#endif
+#if defined(HAVE_VULKAN_INTEL_H)
+#if defined(ENABLE_WAYLAND) || defined(ENABLE_XCB)
                             "to kms\n");
 #endif
             display_mode = DISPLAY_MODE_KMS;
             if (init_kms(vc) == -1) {
-               fprintf(stderr, "failed to initialize kms, falling "
-                               "back to headless\n");
+               fprintf(stderr, "failed to initialize kms, falling back "
+#endif
+#if defined(ENABLE_WAYLAND) || defined(ENABLE_XCB) || defined(HAVE_VULKAN_INTEL_H)
+                               "to headless\n");
+#endif
                display_mode = DISPLAY_MODE_HEADLESS;
                if (init_headless(vc) == -1) {
                   fail("failed to initialize headless mode");
                }
+#if defined(HAVE_VULKAN_INTEL_H)
             }
+#endif
 #if defined(ENABLE_XCB)
          }
 #endif
@@ -1747,10 +1751,12 @@ init_display(struct vkcube *vc)
       if (init_khr(vc) == -1)
          fail("fail to initialize khr");
       break;
+#if defined(HAVE_VULKAN_INTEL_H)
    case DISPLAY_MODE_KMS:
       if (init_kms(vc) == -1)
          fail("failed to initialize kms");
       break;
+#endif
 #if defined(ENABLE_WAYLAND)
    case DISPLAY_MODE_WAYLAND:
       if (init_wayland(vc) == -1)
@@ -1783,9 +1789,11 @@ mainloop(struct vkcube *vc)
       mainloop_xcb(vc);
       break;
 #endif
+#if defined(HAVE_VULKAN_INTEL_H)
    case DISPLAY_MODE_KMS:
       mainloop_vt(vc);
       break;
+#endif
    case DISPLAY_MODE_KHR:
       mainloop_khr(vc);
       break;
@@ -1804,7 +1812,9 @@ int main(int argc, char *argv[])
    parse_args(argc, argv);
 
    vc.model = cube_model;
+#if defined(HAVE_VULKAN_INTEL_H)
    vc.gbm_device = NULL;
+#endif
 #if defined(ENABLE_XCB)
    vc.xcb.window = XCB_NONE;
 #endif

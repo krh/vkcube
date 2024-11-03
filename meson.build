@@ -7,14 +7,15 @@ dep_m = cc.find_library('m', required : false)
 
 dep_vulkan = dependency('vulkan')
 dep_libpng = dependency('libpng')
-dep_libdrm = dependency('libdrm')
-dep_gbm = dependency('gbm')
+dep_libdrm = dependency('libdrm', required : get_option('kms') == 'true')
+dep_gbm = dependency('gbm', required : get_option('kms') == 'true')
 dep_wayland_client = dependency('wayland-client', required : get_option('wayland') == 'true')
 dep_wayland_protocols = dependency('wayland-protocols', version : '>= 1.12', required : get_option('wayland') == 'true')
 dep_xcb = dependency('xcb', required : get_option('xcb') == 'true')
 
 defs = []
-if cc.has_header('vulkan/vulkan_intel.h', dependencies: dep_vulkan)
+if dep_libdrm.found() and dep_gbm.found() and cc.has_header('vulkan/vulkan_intel.h', dependencies: dep_vulkan)
+  message('kms enabled')
   defs += '-DHAVE_VULKAN_INTEL_H'
 endif
 
