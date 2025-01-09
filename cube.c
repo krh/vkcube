@@ -39,17 +39,6 @@ static uint32_t fs_spirv_source[] = {
 #include "vkcube.frag.spv.h"
 };
 
-static int find_host_coherent_memory(struct vkcube *vc, unsigned allowed)
-{
-    for (unsigned i = 0; (1u << i) <= allowed && i <= vc->memory_properties.memoryTypeCount; ++i) {
-        if ((allowed & (1u << i)) &&
-            (vc->memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) &&
-            (vc->memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
-            return i;
-    }
-    return -1;
-}
-
 static void
 init_cube(struct vkcube *vc)
 {
@@ -342,8 +331,10 @@ init_cube(struct vkcube *vc)
    VkMemoryRequirements reqs;
    vkGetBufferMemoryRequirements(vc->device, vc->buffer, &reqs);
 
-   int memory_type = find_host_coherent_memory(vc, reqs.memoryTypeBits);
-   if (memory_type < 0)
+   int32_t memory_type = choose_memory_type_index(vc, reqs.memoryTypeBits,
+                                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+   if (memory_type == -1)
       fail("find_host_coherent_memory failed");
 
    vkAllocateMemory(vc->device,

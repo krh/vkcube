@@ -127,3 +127,6 @@ streq(const char *a, const char *b)
 {
    return strcmp(a, b) == 0;
 }
+
+int32_t choose_memory_type_index(struct vkcube *vc, uint32_t allowed_memory_types,
+                                 VkMemoryPropertyFlags required_props);
