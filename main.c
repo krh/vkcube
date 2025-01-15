@@ -192,7 +192,8 @@ init_vk(struct vkcube *vc, const char *extension)
    vkCreateDevice(vc->physical_device,
                   &(VkDeviceCreateInfo) {
                      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-                     .queueCreateInfoCount = 1,
+                     .pNext = &features,
+		     .queueCreateInfoCount = 1,
                      .pQueueCreateInfos = &(VkDeviceQueueCreateInfo) {
                         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                         .queueFamilyIndex = 0,
@@ -466,11 +467,7 @@ init_headless(struct vkcube *vc)
    return 0;
 }
 
-#ifdef HAVE_VULKAN_INTEL_H
-
 /* KMS display code - render to kernel modesetting fb */
-
-#include <vulkan/vulkan_intel.h>
 
 static struct termios save_tio;
 
@@ -585,29 +582,93 @@ init_kms(struct vkcube *vc)
    vc->image_format = VK_FORMAT_R8G8B8A8_SRGB;
    init_vk_objects(vc);
 
-   PFN_vkCreateDmaBufImageINTEL create_dma_buf_image =
-      (PFN_vkCreateDmaBufImageINTEL)vkGetDeviceProcAddr(vc->device, "vkCreateDmaBufImageINTEL");
-
    for (uint32_t i = 0; i < 2; i++) {
       struct vkcube_buffer *b = &vc->buffers[i];
       int fd, stride, ret;
 
-      b->gbm_bo = gbm_bo_create(vc->gbm_device, vc->width, vc->height,
-                                GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+      /* TODO: Support non-linear modifiers. */
+      uint64_t mod = DRM_FORMAT_MOD_LINEAR;
+      uint32_t flags = GBM_BO_USE_SCANOUT |
+	               (vc->protected ? GBM_BO_USE_PROTECTED : 0);
+      b->gbm_bo = gbm_bo_create_with_modifiers2(vc->gbm_device,
+		                                vc->width,
+						vc->height,
+						GBM_FORMAT_XRGB8888,
+						&mod, 1, flags);
+      if(!b->gbm_bo)
+         fail("failed to create gbm bo\n");
 
       fd = gbm_bo_get_fd(b->gbm_bo);
       stride = gbm_bo_get_stride(b->gbm_bo);
-      create_dma_buf_image(vc->device,
-                           &(VkDmaBufImageCreateInfo) {
-                              .sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
-                              .fd = fd,
-                              .format = vc->image_format,
-                              .extent = { vc->width, vc->height, 1 },
-                              .strideInBytes = stride
-                           },
-                           NULL,
-                           &b->mem,
-                           &b->image);
+
+      VkImageCreateInfo img_info = {
+         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+	 .imageType = VK_IMAGE_TYPE_2D,
+	 .format = vc->image_format,
+         .extent = { .width = vc->width, .height = vc->height, .depth = 1 },
+	 .mipLevels = 1,
+	 .arrayLayers = 1,
+	 .samples = 1,
+	 .tiling = VK_IMAGE_TILING_LINEAR,
+	 .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+	 .flags = vc->protected ? VK_IMAGE_CREATE_PROTECTED_BIT : 0,
+      };
+
+      VkExternalMemoryImageCreateInfo external_img = {
+	 .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+         .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+      };
+
+      img_info.pNext = &external_img;
+
+      VkSubresourceLayout plane_layouts[1] = {0};
+      plane_layouts[0].offset = 0;
+      plane_layouts[0].rowPitch = stride;
+      plane_layouts[0].arrayPitch = 0;
+      plane_layouts[0].depthPitch = 0;
+      plane_layouts[0].size = 0;
+
+      VkImageDrmFormatModifierExplicitCreateInfoEXT mod_info = {
+	 .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
+         .drmFormatModifierPlaneCount = 1,
+         .drmFormatModifier = mod,
+         .pPlaneLayouts = plane_layouts,
+         .pNext = &mod_info,
+      };
+
+      VkResult result = vkCreateImage(vc->device, &img_info, NULL, &b->image);
+      if (result != VK_SUCCESS)
+	 fail("vlCreateImage failed\n");
+
+      VkMemoryRequirements memory_requirements;
+      vkGetImageMemoryRequirements(vc->device, b->image, &memory_requirements);
+
+      VkImageSubresource image_subresource = {
+          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .mipLevel = 0,
+          .arrayLayer = 0,
+      };
+
+      VkSubresourceLayout layout = {};
+      vkGetImageSubresourceLayout(vc->device, b->image, &image_subresource, &layout);
+
+      int32_t mem_type = choose_memory_type_index(vc, memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      VkMemoryAllocateInfo mem_info = {
+         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+         .allocationSize = memory_requirements.size,
+         .memoryTypeIndex = mem_type,
+      };
+
+      VkImportMemoryFdInfoKHR import_mem_fd_info = {
+         .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+         .fd = fd,
+         .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+      };
+
+      mem_info.pNext = &import_mem_fd_info;
+      vkAllocateMemory(vc->device, &mem_info, NULL, &b->mem);
+      vkBindImageMemory(vc->device, b->image, b->mem, 0);
       close(fd);
 
       b->stride = gbm_bo_get_stride(b->gbm_bo);
@@ -683,21 +744,6 @@ mainloop_vt(struct vkcube *vc)
       }
    }
 }
-
-#else
-
-static int
-init_kms(struct vkcube *vc)
-{
-   return -1;
-}
-
-static void
-mainloop_vt(struct vkcube *vc)
-{
-}
-
-#endif
 
 /* Swapchain-based code - shared between XCB and Wayland */
 
