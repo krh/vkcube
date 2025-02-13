@@ -23,6 +23,36 @@
  * IN THE SOFTWARE.
  */
 
+/*
+ * Native KMS code is based on vk_glow.c
+ *
+ * Copyright 2016 The Chromium OS Authors. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following disclaimer in
+ *     the documentation and/or other materials provided with the distribution.
+ *   * Neither the name of Google Inc. nor the names of its
+ *     contributors may be used to endorse or promote products derived from
+ *     this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
 /* Based on kmscube example written by Rob Clark, based on test app originally
  * written by Arvin Schnell.
  *
@@ -134,7 +164,8 @@ static int find_image_memory(struct vkcube *vc, unsigned allowed)
 }
 
 static void
-init_vk(struct vkcube *vc, const char *extension)
+init_vk_ext(struct vkcube *vc, const char *extension,
+    int num_device_extensions, const char * const device_extensions[])
 {
    VkResult res = vkCreateInstance(&(VkInstanceCreateInfo) {
          .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -198,10 +229,8 @@ init_vk(struct vkcube *vc, const char *extension)
                         .flags = vc->protected ? VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT : 0,
                         .pQueuePriorities = (float []) { 1.0f },
                      },
-                     .enabledExtensionCount = 1,
-                     .ppEnabledExtensionNames = (const char * const []) {
-                        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                     },
+                     .enabledExtensionCount = num_device_extensions,
+                     .ppEnabledExtensionNames = device_extensions,
                   },
                   NULL,
                   &vc->device);
@@ -212,6 +241,15 @@ init_vk(struct vkcube *vc, const char *extension)
          .queueFamilyIndex = 0,
          .queueIndex = 0,
       }, &vc->queue);
+}
+
+static void
+init_vk(struct vkcube *vc, const char *extension)
+{
+    init_vk_ext(vc, extension,
+        1, (const char * const []) {
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        });
 }
 
 static void
@@ -451,11 +489,7 @@ init_headless(struct vkcube *vc)
    return 0;
 }
 
-#ifdef HAVE_VULKAN_INTEL_H
-
 /* KMS display code - render to kernel modesetting fb */
-
-#include <vulkan/vulkan_intel.h>
 
 static struct termios save_tio;
 
@@ -524,6 +558,138 @@ init_vt(struct vkcube *vc)
    return 0;
 }
 
+static int
+create_drm_image(struct vkcube *vc, struct vkcube_buffer *b,
+                 uint64_t drm_format, uint64_t drm_format_mod)
+{
+   VkResult res;
+
+   b->gbm_bo = gbm_bo_create_with_modifiers2(vc->gbm_device, vc->width, vc->height,
+                                             drm_format, &drm_format_mod, 1,
+                                             GBM_BO_USE_RENDERING);
+
+   int fd = gbm_bo_get_fd(b->gbm_bo);
+   fail_if(fd < 0, "failed to get prime fd for gbm_bo");
+
+   VkExternalImageFormatProperties external_image_format_props = {
+      .sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES,
+   };
+   res = vkGetPhysicalDeviceImageFormatProperties2(vc->physical_device,
+                                                   &(VkPhysicalDeviceImageFormatInfo2) {
+                                                      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+                                                      .pNext = &(VkPhysicalDeviceExternalImageFormatInfo) {
+                                                         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
+                                                         .pNext = &(VkPhysicalDeviceImageDrmFormatModifierInfoEXT) {
+                                                            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT,
+                                                            .drmFormatModifier = drm_format_mod,
+                                                         },
+                                                         .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+                                                      },
+                                                      .format = vc->image_format,
+                                                      .type = VK_IMAGE_TYPE_2D,
+                                                      .tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
+                                                      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                                                   },
+                                                   &(VkImageFormatProperties2) {
+                                                      .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
+                                                      .pNext = &external_image_format_props,
+                                                   });
+   fail_if(res != VK_SUCCESS, "Failed to get DeviceImageFormatProperties.");
+
+   VkExternalMemoryFeatureFlags feature_flags = external_image_format_props
+      .externalMemoryProperties
+      .externalMemoryFeatures;
+   fail_if(!(feature_flags & VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT), "dma-buf does not support Vulkan import");
+
+   VkImageDrmFormatModifierExplicitCreateInfoEXT mod_create_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
+      .pNext = &(VkExternalMemoryImageCreateInfo) {
+         .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+         .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+      },
+      .drmFormatModifier = drm_format_mod,
+      .drmFormatModifierPlaneCount = 1,
+      .pPlaneLayouts = (VkSubresourceLayout[]) {
+         {
+            .offset = gbm_bo_get_offset(b->gbm_bo, 0),
+            .rowPitch = gbm_bo_get_stride_for_plane(b->gbm_bo, 0),
+         },
+      },
+   };
+
+   VkImageCreateInfo base_create_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .pNext = &mod_create_info,
+      .imageType = VK_IMAGE_TYPE_2D,
+      .format = vc->image_format,
+      .extent = (VkExtent3D) {
+         gbm_bo_get_width(b->gbm_bo),
+         gbm_bo_get_height(b->gbm_bo),
+         1
+      },
+      .mipLevels = 1,
+      .arrayLayers = 1,
+      .samples = 1,
+      .tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+   };
+
+   res = vkCreateImage(vc->device, &base_create_info,
+                       NULL, &b->image);
+   fail_if(res != VK_SUCCESS, "failed to create image");
+
+   PFN_vkGetMemoryFdPropertiesKHR getMemoryFdPropertiesKHR =
+      (void *)vkGetDeviceProcAddr(vc->device, "vkGetMemoryFdPropertiesKHR");
+   fail_if(getMemoryFdPropertiesKHR == NULL,
+           "vkGetDeviceProcAddr(\"vkGetMemoryFdPropertiesKHR\") not available");
+
+   VkMemoryFdPropertiesKHR fd_props = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR,
+   };
+   getMemoryFdPropertiesKHR(vc->device,
+                            VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+                            fd, &fd_props);
+
+   VkMemoryRequirements2 mem_reqs = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
+   };
+   vkGetImageMemoryRequirements2(vc->device,
+                                 &(VkImageMemoryRequirementsInfo2) {
+                                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+                                    .image = b->image,
+                                 }, &mem_reqs);
+
+   const uint32_t memory_type_bits = fd_props.memoryTypeBits &
+      mem_reqs.memoryRequirements.memoryTypeBits;
+   fail_if(!memory_type_bits, "no valid memory type");
+
+   res = vkAllocateMemory(vc->device,
+                          &(VkMemoryAllocateInfo) {
+                             .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                             .pNext = &(VkImportMemoryFdInfoKHR) {
+                                .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+                                .pNext = &(VkMemoryDedicatedAllocateInfo) {
+                                   .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+                                   .image = b->image,
+                                },
+                                .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+                                .fd = fd,
+                             },
+                             .allocationSize = mem_reqs.memoryRequirements.size,
+                             .memoryTypeIndex = ffs(memory_type_bits) - 1,
+                          },
+                          NULL, &b->mem);
+   fail_if(res != VK_SUCCESS, "vkAllocateMemory");
+
+   res = vkBindImageMemory(vc->device, b->image, b->mem, 0);
+   fail_if(res != VK_SUCCESS, "vkBindImageMemory");
+
+   close(fd);
+
+   return 0;
+}
+
 // Return -1 on failure.
 static int
 init_kms(struct vkcube *vc)
@@ -566,43 +732,36 @@ init_kms(struct vkcube *vc)
 
    vc->gbm_device = gbm_create_device(vc->fd);
 
-   init_vk(vc, NULL);
+   init_vk_ext(vc, NULL, 3, (const char * const[]) {
+           VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+           VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+           VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME,
+           VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
+           VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME,
+       });
    vc->image_format = VK_FORMAT_R8G8B8A8_SRGB;
    init_vk_objects(vc);
 
-   PFN_vkCreateDmaBufImageINTEL create_dma_buf_image =
-      (PFN_vkCreateDmaBufImageINTEL)vkGetDeviceProcAddr(vc->device, "vkCreateDmaBufImageINTEL");
-
    for (uint32_t i = 0; i < 2; i++) {
       struct vkcube_buffer *b = &vc->buffers[i];
-      int fd, stride, ret;
+      int stride, ret;
+      const uint64_t drm_format = DRM_FORMAT_XRGB8888;
+      const uint64_t drm_format_mod = DRM_FORMAT_MOD_LINEAR;
 
-      b->gbm_bo = gbm_bo_create(vc->gbm_device, vc->width, vc->height,
-                                GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+      ret = create_drm_image(vc, b, drm_format, drm_format_mod);
+      fail_if(ret == -1, "create_drm_image failed");
 
-      fd = gbm_bo_get_fd(b->gbm_bo);
       stride = gbm_bo_get_stride(b->gbm_bo);
-      create_dma_buf_image(vc->device,
-                           &(VkDmaBufImageCreateInfo) {
-                              .sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
-                              .fd = fd,
-                              .format = vc->image_format,
-                              .extent = { vc->width, vc->height, 1 },
-                              .strideInBytes = stride
-                           },
-                           NULL,
-                           &b->mem,
-                           &b->image);
-      close(fd);
 
       b->stride = gbm_bo_get_stride(b->gbm_bo);
       uint32_t bo_handles[4] = { gbm_bo_get_handle(b->gbm_bo).s32, };
       uint32_t pitches[4] = { stride, };
       uint32_t offsets[4] = { 0, };
-      ret = drmModeAddFB2(vc->fd, vc->width, vc->height,
-                          DRM_FORMAT_XRGB8888, bo_handles,
-                          pitches, offsets, &b->fb, 0);
-      fail_if(ret == -1, "addfb2 failed\n");
+      uint64_t modifiers[4] = { drm_format_mod, };
+      ret = drmModeAddFB2WithModifiers(vc->fd, vc->width, vc->height,
+                                       drm_format, bo_handles,
+                                       pitches, offsets, modifiers, &b->fb, 0);
+      fail_if(ret == -1, "addfb2 failed");
 
       init_buffer(vc, b);
    }
@@ -668,21 +827,6 @@ mainloop_vt(struct vkcube *vc)
       }
    }
 }
-
-#else
-
-static int
-init_kms(struct vkcube *vc)
-{
-   return -1;
-}
-
-static void
-mainloop_vt(struct vkcube *vc)
-{
-}
-
-#endif
 
 /* Swapchain-based code - shared between XCB and Wayland */
 
