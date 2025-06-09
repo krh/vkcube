@@ -55,6 +55,7 @@ struct model {
 struct vkcube {
    struct model model;
 
+   bool fullscreen;
    bool protected;
 
    int fd;
@@ -66,6 +67,8 @@ struct vkcube {
       xcb_window_t window;
       xcb_atom_t atom_wm_protocols;
       xcb_atom_t atom_wm_delete_window;
+      xcb_atom_t atom_net_wm_state;
+      xcb_atom_t atom_net_wm_state_fullscreen;
    } xcb;
 #endif
 

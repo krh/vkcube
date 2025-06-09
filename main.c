@@ -75,6 +75,7 @@ enum display_mode {
 static enum display_mode display_mode = DISPLAY_MODE_AUTO;
 static uint32_t width = 1024, height = 768;
 static const char *arg_out_file = "./cube.png";
+static bool fullscreen = false;
 static bool protected_chain = false;
 
 void noreturn
@@ -876,6 +877,18 @@ init_xcb(struct vkcube *vc)
                        8, // sizeof(char),
                        strlen(title), title);
 
+   if (vc->fullscreen) {
+	   vc->xcb.atom_net_wm_state = get_atom(vc->xcb.conn, "_NET_WM_STATE"),
+	   vc->xcb.atom_net_wm_state_fullscreen = get_atom(vc->xcb.conn, "_NET_WM_STATE_FULLSCREEN"),
+	   xcb_change_property(vc->xcb.conn,
+			       XCB_PROP_MODE_REPLACE,
+			       vc->xcb.window,
+			       vc->xcb.atom_net_wm_state,
+			       XCB_ATOM_ATOM,
+			       32,
+			       1, &vc->xcb.atom_net_wm_state_fullscreen);
+   }
+
    xcb_map_window(vc->xcb.conn, vc->xcb.window);
 
    xcb_flush(vc->xcb.conn);
@@ -1645,7 +1658,7 @@ parse_args(int argc, char *argv[])
     * The initial ':' in the optstring makes getopt return ':' when an option
     * is missing a required argument.
     */
-   static const char *optstring = "+:nm:w:h:o:k:p";
+   static const char *optstring = "+:nm:w:h:o:k:fp";
 
    int opt;
    bool found_arg_headless = false;
@@ -1683,6 +1696,9 @@ parse_args(int argc, char *argv[])
       }
       case 'o':
          arg_out_file = xstrdup(optarg);
+         break;
+      case 'f':
+         fullscreen = true;
          break;
       case 'p':
          protected_chain = true;
@@ -1813,6 +1829,7 @@ int main(int argc, char *argv[])
 #endif
    vc.width = width;
    vc.height = height;
+   vc.fullscreen = fullscreen;
    vc.protected = protected_chain;
    gettimeofday(&vc.start_tv, NULL);
 
